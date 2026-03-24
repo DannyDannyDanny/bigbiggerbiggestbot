@@ -62,13 +62,14 @@ def start_server(port: int, bot_token: str) -> subprocess.Popen:
 def start_tunnel(port: int) -> tuple[subprocess.Popen, str]:
     print(f"  Starting tunnel to port {port}...")
     proc = subprocess.Popen(
-        ["lt", "--port", str(port)],
+        ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
 
     url = None
+    connected = False
     deadline = time.time() + 30
     while time.time() < deadline:
         line = proc.stdout.readline()
@@ -78,16 +79,20 @@ def start_tunnel(port: int) -> tuple[subprocess.Popen, str]:
                 break
             continue
         line = line.strip()
-        print(f"  [tunnel] {line}")
-        match = re.search(r"https?://\S+", line)
-        if match:
-            url = match.group(0)
+        if line:
+            print(f"  [tunnel] {line}")
+        if not url:
+            match = re.search(r"https://\S+\.trycloudflare\.com", line)
+            if match:
+                url = match.group(0)
+        if "Registered tunnel connection" in line:
+            connected = True
             break
 
-    if not url:
+    if not url or not connected:
         proc.kill()
         print("\n  Could not get a tunnel URL.")
-        print("  Make sure localtunnel is working: lt --port 8080\n")
+        print("  Make sure cloudflared is installed: cloudflared tunnel --url http://localhost:8080\n")
         sys.exit(1)
 
     return proc, url

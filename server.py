@@ -202,7 +202,12 @@ def create_app() -> web.Application:
     # Serve the webapp/ folder
     import pathlib
     webapp_dir = pathlib.Path(__file__).parent / "webapp"
-    app.router.add_static("/", webapp_dir, show_index=True)
+
+    async def index_handler(request):
+        return web.FileResponse(webapp_dir / "index.html")
+
+    app.router.add_get("/", index_handler)
+    app.router.add_static("/", webapp_dir)
 
     return app
 

@@ -19,22 +19,10 @@
           aiohttp
         ]);
 
-        localtunnel = pkgs.buildNpmPackage {
-          pname = "localtunnel";
-          version = "2.0.2";
-          src = pkgs.fetchFromGitHub {
-            owner = "localtunnel";
-            repo = "localtunnel";
-            rev = "v2.0.2";
-            hash = "sha256-6gEK1VjF25Kbe2drxbxUKDNJGqZ+OXgkulPkAkMR2+k=";
-          };
-          npmDepsHash = "sha256-R9FYkEe93oGF+dR7i1MxwzEW3EM3SasH/B6LLC2CNXM=";
-          dontNpmBuild = true;
-        };
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = [ pythonEnv localtunnel ];
+          packages = [ pythonEnv pkgs.cloudflared ];
           shellHook = ''
             echo "💪 BigBiggerBiggestBot dev shell"
             echo "   Run:  python start.py    (server + tunnel + bot)"
@@ -46,7 +34,7 @@
         apps.default = {
           type = "app";
           program = toString (pkgs.writeShellScript "run-fitness-bot" ''
-            export PATH="${pkgs.lib.makeBinPath [ pythonEnv localtunnel ]}:$PATH"
+            export PATH="${pkgs.lib.makeBinPath [ pythonEnv pkgs.cloudflared ]}:$PATH"
             exec ${pythonEnv}/bin/python "$PWD/start.py"
           '');
         };
