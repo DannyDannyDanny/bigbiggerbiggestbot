@@ -1,5 +1,5 @@
 {
-  description = "BigBiggerBiggestBot — Telegram fitness tracker";
+  description = "BigBiggerBiggestBot — Telegram fitness tracker with Mini App";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -16,23 +16,38 @@
         pythonEnv = python.withPackages (ps: with ps; [
           python-telegram-bot
           python-dotenv
+          aiohttp
         ]);
+
+        localtunnel = pkgs.buildNpmPackage {
+          pname = "localtunnel";
+          version = "2.0.2";
+          src = pkgs.fetchFromGitHub {
+            owner = "localtunnel";
+            repo = "localtunnel";
+            rev = "v2.0.2";
+            hash = "sha256-6gEK1VjF25Kbe2drxbxUKDNJGqZ+OXgkulPkAkMR2+k=";
+          };
+          npmDepsHash = "sha256-R9FYkEe93oGF+dR7i1MxwzEW3EM3SasH/B6LLC2CNXM=";
+          dontNpmBuild = true;
+        };
       in
       {
-        # `nix develop` — drop into a shell with everything available
         devShells.default = pkgs.mkShell {
-          packages = [ pythonEnv ];
+          packages = [ pythonEnv localtunnel ];
           shellHook = ''
             echo "💪 BigBiggerBiggestBot dev shell"
-            echo "   Run:  python bot.py"
+            echo "   Run:  python start.py    (server + tunnel + bot)"
+            echo "   Run:  python bot.py       (bot only, no mini app)"
           '';
         };
 
-        # `nix run` — start the bot from the current directory
+        # `nix run` — start everything via start.py
         apps.default = {
           type = "app";
-          program = toString (pkgs.writeShellScript "run-bot" ''
-            exec ${pythonEnv}/bin/python "$PWD/bot.py"
+          program = toString (pkgs.writeShellScript "run-fitness-bot" ''
+            export PATH="${pkgs.lib.makeBinPath [ pythonEnv localtunnel ]}:$PATH"
+            exec ${pythonEnv}/bin/python "$PWD/start.py"
           '');
         };
       }

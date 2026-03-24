@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Workout Tracker</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <nav id="tabs">
+      <button class="tab active" data-view="log">Log</button>
+      <button class="tab" data-view="history">History</button>
+      <button class="tab" data-view="stats">Stats</button>
+    </nav>
+
+    <!-- ═══ LOG VIEW ═══ -->
+    <div id="view-log" class="view active">
+      <div class="card" id="text-input-card">
+        <textarea id="inp-raw" class="input" rows="6"
+          placeholder="Bench press: 4x8x35&#10;Lateral raise: 4x8x4&#10;&#10;Squats: 5x5x30"></textarea>
+        <div class="hint">Same format as the bot. Blank line = new group. Consecutive lines = superset.</div>
+        <button id="btn-save" class="btn btn-primary">Save Workout</button>
+      </div>
+
+      <!-- Quick-add from history -->
+      <div id="suggestions" style="display:none">
+        <div class="section-label">Recent exercises</div>
+        <div id="suggestion-chips"></div>
+      </div>
+    </div>
+
+    <!-- ═══ HISTORY VIEW ═══ -->
+    <div id="view-history" class="view">
+      <div id="history-list"></div>
+      <div id="no-history" class="empty-state">
+        <div class="empty-icon">📋</div>
+        <p>No workouts yet</p>
+      </div>
+      <button id="btn-load-more" class="btn btn-secondary" style="display:none">Load more</button>
+    </div>
+
+    <!-- ═══ STATS VIEW ═══ -->
+    <div id="view-stats" class="view">
+      <div id="stats-content" class="empty-state">
+        <div class="empty-icon">📊</div>
+        <p>Loading…</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

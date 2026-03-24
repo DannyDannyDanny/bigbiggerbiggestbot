@@ -5,9 +5,10 @@ import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp
 from telegram.constants import ParseMode
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
@@ -47,6 +48,9 @@ def _load_token() -> str:
 
 BOT_TOKEN = _load_token()
 
+# Mini App URL — set automatically by start.py via localtunnel
+WEBAPP_URL = os.environ.get("WEBAPP_URL", "")
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +78,7 @@ def extract_timestamp(update: Update) -> tuple[datetime, bool]:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
+    text = (
         "💪 <b>Fitness Tracker Bot</b>\n\n"
         "Send me your workout and I'll save it!\n\n"
         "<b>Format:</b>\n"
@@ -87,9 +91,20 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "I'll use the original timestamp.\n\n"
         "<b>Commands:</b>\n"
         "/history — view recent workouts\n"
-        "/stats — quick summary",
-        parse_mode=ParseMode.HTML,
+        "/stats — quick summary"
     )
+
+    if WEBAPP_URL:
+        btn = InlineKeyboardButton(
+            text="Open Workout Tracker",
+            web_app=WebAppInfo(url=WEBAPP_URL),
+        )
+        await update.message.reply_text(
+            text, parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[btn]]),
+        )
+    else:
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
 async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -191,10 +206,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
+async def post_init(app: Application):
+    """Set the bot's menu button to open the Mini App (if URL is available)."""
+    if WEBAPP_URL:
+        await app.bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Workout",
+                web_app=WebAppInfo(url=WEBAPP_URL),
+            )
+        )
+        logger.info("Menu button set to Mini App at %s", WEBAPP_URL)
+    else:
+        logger.info("No WEBAPP_URL — menu button not set")
+
+
 def main():
     init_db()
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    builder = ApplicationBuilder().token(BOT_TOKEN)
+    if WEBAPP_URL:
+        builder = builder.post_init(post_init)
+    app = builder.build()
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("history", cmd_history))
