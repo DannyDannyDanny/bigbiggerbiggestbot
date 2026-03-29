@@ -12,6 +12,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 import pathlib
 
@@ -62,7 +63,7 @@ def start_server(port: int, bot_token: str) -> subprocess.Popen:
 def start_tunnel(port: int) -> tuple[subprocess.Popen, str]:
     print(f"  Starting tunnel to port {port}...")
     proc = subprocess.Popen(
-        ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+        ["cloudflared", "tunnel", "--url", f"http://localhost:{port}", "--protocol", "http2"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -94,6 +95,13 @@ def start_tunnel(port: int) -> tuple[subprocess.Popen, str]:
         print("\n  Could not get a tunnel URL.")
         print("  Make sure cloudflared is installed: cloudflared tunnel --url http://localhost:8080\n")
         sys.exit(1)
+
+    # Keep draining cloudflared output so its pipe buffer doesn't fill up
+    # (which would block the process and kill the tunnel)
+    def _drain():
+        for line in proc.stdout:
+            pass
+    threading.Thread(target=_drain, daemon=True).start()
 
     return proc, url
 
