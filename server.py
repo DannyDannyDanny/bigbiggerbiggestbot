@@ -2,8 +2,10 @@
 API + static file server for the Telegram Mini App.
 Serves webapp/ and REST endpoints, using the existing db.py layer.
 """
+import csv
 import hashlib
 import hmac
+import io
 import json
 import logging
 import os
@@ -11,7 +13,7 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 
-from db import init_db, get_db, save_workout, get_workouts, get_workout_count
+from db import init_db, get_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, export_workouts
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -122,9 +124,13 @@ async def api_save_workout(request: web.Request):
         )
     elif raw_text:
         # Text-based input (same format as sending a message to the bot)
-        groups = parse_workout(raw_text)
+        groups, errors = parse_workout(raw_text)
         if not groups:
-            return web.json_response({"error": "Could not parse workout text"}, status=400)
+            error_lines = [e.line for e in errors] if errors else []
+            return web.json_response(
+                {"error": "Could not parse workout text", "failed_lines": error_lines},
+                status=400,
+            )
         from datetime import datetime, timezone
         superset_dicts = [[ex.to_dict() for ex in group] for group in groups]
         workout_id = save_workout(
@@ -139,6 +145,15 @@ async def api_save_workout(request: web.Request):
         )
 
     return web.json_response({"workout_id": workout_id}, status=201)
+
+
+@require_auth
+async def api_delete_workout(request: web.Request):
+    """Delete a workout by ID."""
+    workout_id = int(request.match_info["workout_id"])
+    if delete_workout(request["user_id"], workout_id):
+        return web.json_response({"deleted": True})
+    return web.json_response({"error": "Not found"}, status=404)
 
 
 @require_auth
@@ -160,31 +175,33 @@ async def api_get_exercise_names(request: web.Request):
 @require_auth
 async def api_get_stats(request: web.Request):
     """Return summary stats for the user."""
-    user_id = request["user_id"]
-    total = get_workout_count(user_id)
-    if total == 0:
-        return web.json_response({
-            "total_workouts": 0, "unique_exercises": 0,
-            "total_sets": 0, "total_volume": 0,
-        })
+    stats = get_stats_sql(request["user_id"])
+    return web.json_response(stats)
 
-    workouts = get_workouts(user_id, limit=10000)
-    exercise_names = set()
-    total_sets = 0
-    total_volume = 0.0
-    for w in workouts:
-        for group in w["superset_groups"]:
-            for ex in group:
-                exercise_names.add(ex["name"].lower())
-                total_sets += ex["sets"]
-                total_volume += ex["sets"] * ex["reps"] * ex["weight_kg"]
 
-    return web.json_response({
-        "total_workouts": total,
-        "unique_exercises": len(exercise_names),
-        "total_sets": total_sets,
-        "total_volume": round(total_volume, 1),
-    })
+@require_auth
+async def api_export_json(request: web.Request):
+    """Export all workouts as JSON."""
+    data = export_workouts(request["user_id"])
+    return web.json_response({"records": data, "count": len(data)})
+
+
+@require_auth
+async def api_export_csv(request: web.Request):
+    """Export all workouts as CSV."""
+    data = export_workouts(request["user_id"])
+
+    output = io.StringIO()
+    if data:
+        writer = csv.DictWriter(output, fieldnames=data[0].keys())
+        writer.writeheader()
+        writer.writerows(data)
+
+    return web.Response(
+        text=output.getvalue(),
+        content_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=workouts.csv"},
+    )
 
 
 # ── App setup ────────────────────────────────────────────────────
@@ -196,8 +213,11 @@ def create_app() -> web.Application:
 
     app.router.add_get("/api/workouts", api_get_workouts)
     app.router.add_post("/api/workouts", api_save_workout)
+    app.router.add_delete("/api/workouts/{workout_id}", api_delete_workout)
     app.router.add_get("/api/exercises", api_get_exercise_names)
     app.router.add_get("/api/stats", api_get_stats)
+    app.router.add_get("/api/export/json", api_export_json)
+    app.router.add_get("/api/export/csv", api_export_csv)
 
     # Serve the webapp/ folder
     import pathlib

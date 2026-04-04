@@ -1,5 +1,6 @@
 """Database layer for the fitness bot."""
 
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -49,21 +50,26 @@ def init_db():
                 superset_group_id   INTEGER NOT NULL REFERENCES superset_groups(id) ON DELETE CASCADE,
                 position            INTEGER NOT NULL,   -- ordering within the superset group
                 name                TEXT    NOT NULL,
-                machine_id          TEXT,                -- e.g. "500", "620"
+                machine_id          TEXT,                -- e.g. "3032", "5014"
                 sets                INTEGER NOT NULL,
                 reps                INTEGER NOT NULL,
                 weight_kg           REAL    NOT NULL,
-                raw_line            TEXT                 -- the original line as typed
+                raw_line            TEXT,                -- the original line as typed
+                sets_detail         TEXT                 -- JSON array of {reps, weight_kg} per set
             );
 
             CREATE INDEX IF NOT EXISTS idx_workouts_user
                 ON workouts(user_id, timestamp);
         """)
 
-        # Migration: add raw_text column if it doesn't exist yet
+        # Migrations
         cols = {r[1] for r in conn.execute("PRAGMA table_info(workouts)").fetchall()}
         if "raw_text" not in cols:
             conn.execute("ALTER TABLE workouts ADD COLUMN raw_text TEXT")
+
+        ex_cols = {r[1] for r in conn.execute("PRAGMA table_info(exercises)").fetchall()}
+        if "sets_detail" not in ex_cols:
+            conn.execute("ALTER TABLE exercises ADD COLUMN sets_detail TEXT")
 
 
 def save_workout(user_id: int, timestamp: datetime, superset_groups: list[list[dict]], raw_text: str | None = None, note: str | None = None) -> int:
@@ -71,7 +77,7 @@ def save_workout(user_id: int, timestamp: datetime, superset_groups: list[list[d
     Save a parsed workout.
 
     superset_groups: list of groups, each group is a list of exercise dicts:
-        {name, machine_id, sets, reps, weight_kg, raw_line}
+        {name, machine_id, sets, reps, weight_kg, raw_line, sets_detail}
     raw_text: the full original message text, stored verbatim.
 
     Returns the workout id.
@@ -91,15 +97,29 @@ def save_workout(user_id: int, timestamp: datetime, superset_groups: list[list[d
             group_id = cur2.lastrowid
 
             for ex_pos, ex in enumerate(group):
+                sets_detail_json = None
+                if ex.get("sets_detail"):
+                    sets_detail_json = json.dumps(ex["sets_detail"])
                 conn.execute(
                     """INSERT INTO exercises
-                       (superset_group_id, position, name, machine_id, sets, reps, weight_kg, raw_line)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (superset_group_id, position, name, machine_id, sets, reps, weight_kg, raw_line, sets_detail)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (group_id, ex_pos, ex["name"], ex.get("machine_id"),
-                     ex["sets"], ex["reps"], ex["weight_kg"], ex.get("raw_line")),
+                     ex["sets"], ex["reps"], ex["weight_kg"], ex.get("raw_line"),
+                     sets_detail_json),
                 )
 
         return workout_id
+
+
+def delete_workout(user_id: int, workout_id: int) -> bool:
+    """Delete a workout by ID. Returns True if deleted, False if not found or not owned."""
+    with get_db() as conn:
+        cur = conn.execute(
+            "DELETE FROM workouts WHERE id = ? AND user_id = ?",
+            (workout_id, user_id),
+        )
+        return cur.rowcount > 0
 
 
 def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
@@ -119,7 +139,8 @@ def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
             workout = dict(row)
             groups = conn.execute(
                 """SELECT sg.id as group_id, sg.position as group_pos,
-                          e.name, e.machine_id, e.sets, e.reps, e.weight_kg, e.raw_line, e.position as ex_pos
+                          e.name, e.machine_id, e.sets, e.reps, e.weight_kg,
+                          e.raw_line, e.position as ex_pos, e.sets_detail
                    FROM superset_groups sg
                    JOIN exercises e ON e.superset_group_id = sg.id
                    WHERE sg.workout_id = ?
@@ -132,7 +153,16 @@ def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
                 gp = g["group_pos"]
                 if gp not in superset_groups:
                     superset_groups[gp] = []
-                superset_groups[gp].append(dict(g))
+                ex_dict = dict(g)
+                # Deserialize sets_detail JSON
+                if ex_dict.get("sets_detail"):
+                    try:
+                        ex_dict["sets_detail"] = json.loads(ex_dict["sets_detail"])
+                    except json.JSONDecodeError:
+                        ex_dict["sets_detail"] = []
+                else:
+                    ex_dict["sets_detail"] = []
+                superset_groups[gp].append(ex_dict)
 
             workout["superset_groups"] = [superset_groups[k] for k in sorted(superset_groups)]
             workouts.append(workout)
@@ -146,3 +176,45 @@ def get_workout_count(user_id: int) -> int:
             "SELECT COUNT(*) as cnt FROM workouts WHERE user_id = ?", (user_id,)
         ).fetchone()
         return row["cnt"]
+
+
+def get_stats_sql(user_id: int) -> dict:
+    """Compute stats entirely in SQL."""
+    with get_db() as conn:
+        row = conn.execute("""
+            SELECT
+                COUNT(DISTINCT w.id) as total_workouts,
+                COUNT(DISTINCT LOWER(e.name)) as unique_exercises,
+                COALESCE(SUM(e.sets), 0) as total_sets,
+                COALESCE(SUM(e.sets * e.reps * e.weight_kg), 0) as total_volume
+            FROM workouts w
+            JOIN superset_groups sg ON sg.workout_id = w.id
+            JOIN exercises e ON e.superset_group_id = sg.id
+            WHERE w.user_id = ?
+        """, (user_id,)).fetchone()
+
+        return {
+            "total_workouts": row["total_workouts"],
+            "unique_exercises": row["unique_exercises"],
+            "total_sets": row["total_sets"],
+            "total_volume": round(row["total_volume"], 1),
+        }
+
+
+def export_workouts(user_id: int) -> list[dict]:
+    """Export all workouts as flat records for CSV/JSON export."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                w.id as workout_id, w.timestamp, w.created_at, w.raw_text,
+                sg.position as group_pos,
+                e.name, e.machine_id, e.sets, e.reps, e.weight_kg,
+                e.raw_line, e.sets_detail
+            FROM workouts w
+            JOIN superset_groups sg ON sg.workout_id = w.id
+            JOIN exercises e ON e.superset_group_id = sg.id
+            WHERE w.user_id = ?
+            ORDER BY w.timestamp DESC, sg.position, e.position
+        """, (user_id,)).fetchall()
+
+        return [dict(r) for r in rows]
