@@ -66,21 +66,40 @@ def init_db():
         cols = {r[1] for r in conn.execute("PRAGMA table_info(workouts)").fetchall()}
         if "raw_text" not in cols:
             conn.execute("ALTER TABLE workouts ADD COLUMN raw_text TEXT")
+        if "deleted_at" not in cols:
+            conn.execute("ALTER TABLE workouts ADD COLUMN deleted_at TEXT")
 
         ex_cols = {r[1] for r in conn.execute("PRAGMA table_info(exercises)").fetchall()}
         if "sets_detail" not in ex_cols:
             conn.execute("ALTER TABLE exercises ADD COLUMN sets_detail TEXT")
 
 
+def _save_exercises(conn, workout_id: int, superset_groups: list[list[dict]]):
+    """Insert superset groups and exercises for a workout."""
+    for group_pos, group in enumerate(superset_groups):
+        cur = conn.execute(
+            "INSERT INTO superset_groups (workout_id, position) VALUES (?, ?)",
+            (workout_id, group_pos),
+        )
+        group_id = cur.lastrowid
+
+        for ex_pos, ex in enumerate(group):
+            sets_detail_json = None
+            if ex.get("sets_detail"):
+                sets_detail_json = json.dumps(ex["sets_detail"])
+            conn.execute(
+                """INSERT INTO exercises
+                   (superset_group_id, position, name, machine_id, sets, reps, weight_kg, raw_line, sets_detail)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (group_id, ex_pos, ex["name"], ex.get("machine_id"),
+                 ex["sets"], ex["reps"], ex["weight_kg"], ex.get("raw_line"),
+                 sets_detail_json),
+            )
+
+
 def save_workout(user_id: int, timestamp: datetime, superset_groups: list[list[dict]], raw_text: str | None = None, note: str | None = None) -> int:
     """
-    Save a parsed workout.
-
-    superset_groups: list of groups, each group is a list of exercise dicts:
-        {name, machine_id, sets, reps, weight_kg, raw_line, sets_detail}
-    raw_text: the full original message text, stored verbatim.
-
-    Returns the workout id.
+    Save a parsed workout. Returns the workout id.
     """
     with get_db() as conn:
         cur = conn.execute(
@@ -88,47 +107,57 @@ def save_workout(user_id: int, timestamp: datetime, superset_groups: list[list[d
             (user_id, timestamp.isoformat(), note, raw_text),
         )
         workout_id = cur.lastrowid
-
-        for group_pos, group in enumerate(superset_groups):
-            cur2 = conn.execute(
-                "INSERT INTO superset_groups (workout_id, position) VALUES (?, ?)",
-                (workout_id, group_pos),
-            )
-            group_id = cur2.lastrowid
-
-            for ex_pos, ex in enumerate(group):
-                sets_detail_json = None
-                if ex.get("sets_detail"):
-                    sets_detail_json = json.dumps(ex["sets_detail"])
-                conn.execute(
-                    """INSERT INTO exercises
-                       (superset_group_id, position, name, machine_id, sets, reps, weight_kg, raw_line, sets_detail)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (group_id, ex_pos, ex["name"], ex.get("machine_id"),
-                     ex["sets"], ex["reps"], ex["weight_kg"], ex.get("raw_line"),
-                     sets_detail_json),
-                )
-
+        _save_exercises(conn, workout_id, superset_groups)
         return workout_id
 
 
+def update_workout(user_id: int, workout_id: int, superset_groups: list[list[dict]], note: str | None = None) -> int | None:
+    """
+    Update a workout by soft-deleting the old one and creating a new one
+    with the same timestamp. Returns the new workout id, or None if not found.
+    """
+    with get_db() as conn:
+        # Fetch the original workout
+        row = conn.execute(
+            "SELECT timestamp, raw_text FROM workouts WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+            (workout_id, user_id),
+        ).fetchone()
+        if not row:
+            return None
+
+        # Soft-delete the old workout
+        conn.execute(
+            "UPDATE workouts SET deleted_at = datetime('now') WHERE id = ?",
+            (workout_id,),
+        )
+
+        # Create new workout with original timestamp
+        cur = conn.execute(
+            "INSERT INTO workouts (user_id, timestamp, note, raw_text) VALUES (?, ?, ?, ?)",
+            (user_id, row["timestamp"], note, row["raw_text"]),
+        )
+        new_id = cur.lastrowid
+        _save_exercises(conn, new_id, superset_groups)
+        return new_id
+
+
 def delete_workout(user_id: int, workout_id: int) -> bool:
-    """Delete a workout by ID. Returns True if deleted, False if not found or not owned."""
+    """Soft-delete a workout. Returns True if found, False otherwise."""
     with get_db() as conn:
         cur = conn.execute(
-            "DELETE FROM workouts WHERE id = ? AND user_id = ?",
+            "UPDATE workouts SET deleted_at = datetime('now') WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
             (workout_id, user_id),
         )
         return cur.rowcount > 0
 
 
 def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
-    """Fetch recent workouts for a user, newest first."""
+    """Fetch recent non-deleted workouts for a user, newest first."""
     with get_db() as conn:
         rows = conn.execute(
             """SELECT id, timestamp, note, raw_text, created_at
                FROM workouts
-               WHERE user_id = ?
+               WHERE user_id = ? AND deleted_at IS NULL
                ORDER BY timestamp DESC
                LIMIT ? OFFSET ?""",
             (user_id, limit, offset),
@@ -154,7 +183,6 @@ def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
                 if gp not in superset_groups:
                     superset_groups[gp] = []
                 ex_dict = dict(g)
-                # Deserialize sets_detail JSON
                 if ex_dict.get("sets_detail"):
                     try:
                         ex_dict["sets_detail"] = json.loads(ex_dict["sets_detail"])
@@ -173,7 +201,7 @@ def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
 def get_workout_count(user_id: int) -> int:
     with get_db() as conn:
         row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM workouts WHERE user_id = ?", (user_id,)
+            "SELECT COUNT(*) as cnt FROM workouts WHERE user_id = ? AND deleted_at IS NULL", (user_id,)
         ).fetchone()
         return row["cnt"]
 
@@ -190,7 +218,7 @@ def get_stats_sql(user_id: int) -> dict:
             FROM workouts w
             JOIN superset_groups sg ON sg.workout_id = w.id
             JOIN exercises e ON e.superset_group_id = sg.id
-            WHERE w.user_id = ?
+            WHERE w.user_id = ? AND w.deleted_at IS NULL
         """, (user_id,)).fetchone()
 
         return {
@@ -202,7 +230,7 @@ def get_stats_sql(user_id: int) -> dict:
 
 
 def export_workouts(user_id: int) -> list[dict]:
-    """Export all workouts as flat records for CSV/JSON export."""
+    """Export all non-deleted workouts as flat records for CSV/JSON export."""
     with get_db() as conn:
         rows = conn.execute("""
             SELECT
@@ -213,7 +241,7 @@ def export_workouts(user_id: int) -> list[dict]:
             FROM workouts w
             JOIN superset_groups sg ON sg.workout_id = w.id
             JOIN exercises e ON e.superset_group_id = sg.id
-            WHERE w.user_id = ?
+            WHERE w.user_id = ? AND w.deleted_at IS NULL
             ORDER BY w.timestamp DESC, sg.position, e.position
         """, (user_id,)).fetchall()
 

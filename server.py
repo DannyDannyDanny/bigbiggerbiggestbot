@@ -13,7 +13,7 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 
-from db import init_db, get_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, export_workouts
+from db import init_db, get_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -112,6 +112,7 @@ async def api_save_workout(request: web.Request):
     body = await request.json()
     raw_text = body.get("raw_text", "")
     superset_groups = body.get("superset_groups")
+    note = body.get("note") or None
 
     if superset_groups:
         # Structured input from the Mini App UI
@@ -121,6 +122,7 @@ async def api_save_workout(request: web.Request):
             timestamp=datetime.now(timezone.utc),
             superset_groups=superset_groups,
             raw_text=raw_text or None,
+            note=note,
         )
     elif raw_text:
         # Text-based input (same format as sending a message to the bot)
@@ -138,6 +140,7 @@ async def api_save_workout(request: web.Request):
             timestamp=datetime.now(timezone.utc),
             superset_groups=superset_dicts,
             raw_text=raw_text,
+            note=note,
         )
     else:
         return web.json_response(
@@ -148,8 +151,25 @@ async def api_save_workout(request: web.Request):
 
 
 @require_auth
+async def api_update_workout(request: web.Request):
+    """Update a workout — soft-deletes old, creates new with same timestamp."""
+    workout_id = int(request.match_info["workout_id"])
+    body = await request.json()
+    superset_groups = body.get("superset_groups")
+    note = body.get("note") or None
+
+    if not superset_groups:
+        return web.json_response({"error": "Provide superset_groups"}, status=400)
+
+    new_id = update_workout(request["user_id"], workout_id, superset_groups, note=note)
+    if new_id is None:
+        return web.json_response({"error": "Not found"}, status=404)
+    return web.json_response({"workout_id": new_id})
+
+
+@require_auth
 async def api_delete_workout(request: web.Request):
-    """Delete a workout by ID."""
+    """Soft-delete a workout by ID."""
     workout_id = int(request.match_info["workout_id"])
     if delete_workout(request["user_id"], workout_id):
         return web.json_response({"deleted": True})
@@ -213,6 +233,7 @@ def create_app() -> web.Application:
 
     app.router.add_get("/api/workouts", api_get_workouts)
     app.router.add_post("/api/workouts", api_save_workout)
+    app.router.add_put("/api/workouts/{workout_id}", api_update_workout)
     app.router.add_delete("/api/workouts/{workout_id}", api_delete_workout)
     app.router.add_get("/api/exercises", api_get_exercise_names)
     app.router.add_get("/api/stats", api_get_stats)
