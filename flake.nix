@@ -17,6 +17,8 @@
           python-telegram-bot
           python-dotenv
           aiohttp
+          pytest
+          pytest-asyncio
         ]);
 
       in
