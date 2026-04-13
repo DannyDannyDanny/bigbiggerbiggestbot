@@ -42,6 +42,110 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove("show"), 2000);
 }
 
+// ── Draft persistence (localStorage) ────────────────────────────
+const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function draftKey() {
+  return "draft_workout_" + userId;
+}
+
+function saveDraft() {
+  if (!userId) return;
+  try {
+    const draft = {
+      workout,
+      currentExercise,
+      currentSets: getCurrentSets(),
+      note: noteInput?.value || "",
+      editingWorkoutId,
+      activeView: document.querySelector(".tab.active")?.dataset.view || "log",
+      rawDetailsOpen: document.getElementById("raw-details")?.open || false,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(draftKey(), JSON.stringify(draft));
+  } catch (e) {
+    console.warn("Failed to save draft", e);
+  }
+}
+
+function clearDraft() {
+  if (!userId) return;
+  try {
+    localStorage.removeItem(draftKey());
+  } catch (e) {
+    console.warn("Failed to clear draft", e);
+  }
+}
+
+function restoreDraft() {
+  if (!userId) return false;
+  try {
+    const raw = localStorage.getItem(draftKey());
+    if (!raw) return false;
+
+    const draft = JSON.parse(raw);
+
+    // Expire old drafts
+    if (draft.savedAt && Date.now() - draft.savedAt > DRAFT_EXPIRY_MS) {
+      clearDraft();
+      return false;
+    }
+
+    // Restore completed exercises
+    if (Array.isArray(draft.workout) && draft.workout.length > 0) {
+      workout = draft.workout;
+      renderWorkout();
+    }
+
+    // Restore in-progress exercise
+    if (draft.currentExercise) {
+      currentExercise = draft.currentExercise;
+      setsSection.classList.remove("hidden");
+      setsLabel.textContent = currentExercise.name;
+      setsList.innerHTML = "";
+      if (Array.isArray(draft.currentSets)) {
+        draft.currentSets.forEach((s) => addSetToDOM(s.reps, s.weight_kg));
+      }
+    }
+
+    // Restore active tab
+    if (draft.activeView && draft.activeView !== "log") {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+      const tab = document.querySelector(`.tab[data-view="${draft.activeView}"]`);
+      if (tab) {
+        tab.classList.add("active");
+        document.getElementById("view-" + draft.activeView)?.classList.add("active");
+        if (draft.activeView === "history") loadHistory();
+        if (draft.activeView === "stats") loadStats();
+      }
+    }
+
+    // Restore note
+    if (draft.note && noteInput) {
+      noteInput.value = draft.note;
+    }
+
+    // Restore editing state
+    if (draft.editingWorkoutId) {
+      editingWorkoutId = draft.editingWorkoutId;
+      updateEditingUI();
+    }
+
+    // Restore raw details open state
+    if (draft.rawDetailsOpen) {
+      const details = document.getElementById("raw-details");
+      if (details) details.open = true;
+    }
+
+    return true;
+  } catch (e) {
+    console.warn("Failed to restore draft", e);
+    clearDraft();
+    return false;
+  }
+}
+
 // ── Tab navigation ──────────────────────────────────────────────
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -50,17 +154,433 @@ document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.add("active");
     document.getElementById("view-" + tab.dataset.view).classList.add("active");
     tg.HapticFeedback.selectionChanged();
+    saveDraft();
 
-    // Lazy-load data when switching tabs
     if (tab.dataset.view === "history") loadHistory();
     if (tab.dataset.view === "stats") loadStats();
   });
 });
 
-// ── Log View ────────────────────────────────────────────────────
-let historyOffset = 0;
+// Persist raw details toggle
+document.getElementById("raw-details")?.addEventListener("toggle", saveDraft);
 
-document.getElementById("btn-save").addEventListener("click", async () => {
+// Persist note changes (debounced)
+let noteSaveTimer;
+document.getElementById("inp-note")?.addEventListener("input", () => {
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = setTimeout(saveDraft, 400);
+});
+
+// ── State ───────────────────────────────────────────────────────
+let workout = [];
+let knownExercises = [];
+let currentExercise = null;
+let editingWorkoutId = null; // non-null when editing a saved workout
+
+// ── Structured Log View ─────────────────────────────────────────
+
+const nameInput = document.getElementById("inp-exercise-name");
+const btnAddExercise = document.getElementById("btn-add-exercise");
+const autocompleteList = document.getElementById("autocomplete-list");
+const setsSection = document.getElementById("sets-section");
+const setsLabel = document.getElementById("sets-label");
+const setsList = document.getElementById("sets-list");
+const repsInput = document.getElementById("inp-reps");
+const weightInput = document.getElementById("inp-weight");
+const btnAddSet = document.getElementById("btn-add-set");
+const btnSaveWorkout = document.getElementById("btn-save-workout");
+const workoutExercises = document.getElementById("workout-exercises");
+const notesSection = document.getElementById("notes-section");
+const noteInput = document.getElementById("inp-note");
+
+// Exercise name input — autocomplete
+nameInput.addEventListener("input", () => {
+  const val = nameInput.value.trim().toLowerCase();
+  autocompleteList.innerHTML = "";
+  if (!val) {
+    autocompleteList.classList.remove("visible");
+    return;
+  }
+
+  const matches = knownExercises.filter((n) =>
+    n.toLowerCase().includes(val)
+  ).slice(0, 8);
+
+  if (matches.length === 0) {
+    autocompleteList.classList.remove("visible");
+    return;
+  }
+
+  matches.forEach((name) => {
+    const item = document.createElement("div");
+    item.className = "autocomplete-item";
+    item.textContent = name;
+    item.addEventListener("click", () => {
+      nameInput.value = name;
+      autocompleteList.innerHTML = "";
+      autocompleteList.classList.remove("visible");
+      startExercise(name);
+    });
+    autocompleteList.appendChild(item);
+  });
+  autocompleteList.classList.add("visible");
+});
+
+// Close autocomplete on outside click
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#add-exercise-card")) {
+    autocompleteList.innerHTML = "";
+    autocompleteList.classList.remove("visible");
+  }
+});
+
+// Enter on name input → start exercise
+nameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const name = nameInput.value.trim();
+    if (name) {
+      autocompleteList.innerHTML = "";
+      autocompleteList.classList.remove("visible");
+      startExercise(name);
+    }
+  }
+});
+
+btnAddExercise.addEventListener("click", () => {
+  const name = nameInput.value.trim();
+  if (name) {
+    autocompleteList.innerHTML = "";
+    autocompleteList.classList.remove("visible");
+    startExercise(name);
+  }
+});
+
+const btnDeleteExercise = document.getElementById("btn-delete-exercise");
+
+function startExercise(name) {
+  if (currentExercise && getCurrentSets().length > 0) {
+    finishCurrentExercise();
+  }
+
+  currentExercise = { name, machine_id: null };
+  setsSection.classList.remove("hidden");
+  setsLabel.textContent = name;
+  setsList.innerHTML = "";
+  nameInput.value = "";
+  repsInput.value = "";
+  weightInput.value = "";
+  repsInput.focus();
+  notesSection.classList.remove("hidden");
+  btnDeleteExercise.classList.add("hidden");
+  tg.HapticFeedback.selectionChanged();
+  saveDraft();
+}
+
+function getCurrentSets() {
+  return Array.from(setsList.querySelectorAll(".set-entry")).map((el) => ({
+    reps: parseInt(el.dataset.reps),
+    weight_kg: parseFloat(el.dataset.weight),
+  }));
+}
+
+// Add a set entry to the DOM (used by both addSet and restoreDraft)
+function addSetToDOM(reps, weight) {
+  const entry = document.createElement("div");
+  entry.className = "set-entry";
+  entry.dataset.reps = reps;
+  entry.dataset.weight = weight;
+
+  const label = weight
+    ? `${reps} x ${fmtWeight(weight)}kg`
+    : `${reps} reps`;
+
+  entry.innerHTML = `
+    <span class="set-text">${label}</span>
+    <button class="btn-remove" title="Remove">&times;</button>
+  `;
+  entry.querySelector(".btn-remove").addEventListener("click", () => {
+    entry.remove();
+    tg.HapticFeedback.selectionChanged();
+    saveDraft();
+  });
+
+  setsList.appendChild(entry);
+}
+
+// Parse a weight string, accepting both comma and dot as decimal separators
+function parseWeight(s) {
+  if (!s) return 0;
+  return parseFloat(String(s).replace(",", ".")) || 0;
+}
+
+// Add set from input fields
+function addSet() {
+  const reps = parseInt(repsInput.value);
+  if (!reps || reps <= 0) {
+    showToast("Enter reps");
+    tg.HapticFeedback.notificationOccurred("error");
+    return;
+  }
+  const weight = parseWeight(weightInput.value);
+
+  addSetToDOM(reps, weight);
+
+  repsInput.value = "";
+  weightInput.value = weight ? String(weight) : "";
+  repsInput.focus();
+  tg.HapticFeedback.impactOccurred("light");
+  saveDraft();
+}
+
+btnAddSet.addEventListener("click", addSet);
+
+repsInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (repsInput.value.trim()) {
+      weightInput.focus();
+    }
+    // Empty reps → stay put, keyboard stays open
+  }
+});
+weightInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (!repsInput.value.trim()) {
+      // No reps yet — jump back to reps
+      repsInput.focus();
+      return;
+    }
+    addSet();
+    // After addSet, focus is already on repsInput (set inside addSet)
+  }
+});
+
+// Delete the current exercise being edited (discard without saving back)
+btnDeleteExercise.addEventListener("click", () => {
+  currentExercise = null;
+  setsSection.classList.add("hidden");
+  setsList.innerHTML = "";
+  btnDeleteExercise.classList.add("hidden");
+  renderWorkout();
+  tg.HapticFeedback.notificationOccurred("warning");
+  saveDraft();
+});
+
+// Finish current exercise → add to workout
+function finishCurrentExercise() {
+  if (!currentExercise) return;
+  const sets = getCurrentSets();
+  if (sets.length === 0) return;
+
+  workout.push({
+    name: currentExercise.name,
+    machine_id: null,
+    sets_detail: sets,
+    sets: sets.length,
+    reps: sets[0].reps,
+    weight_kg: sets[0].weight_kg,
+  });
+
+  currentExercise = null;
+  setsSection.classList.add("hidden");
+  setsList.innerHTML = "";
+  renderWorkout();
+  saveDraft();
+}
+
+function renderWorkout() {
+  workoutExercises.innerHTML = "";
+  const hasAny = workout.length > 0 || currentExercise !== null;
+
+  if (workout.length === 0) {
+    btnSaveWorkout.classList.add("hidden");
+  } else {
+    btnSaveWorkout.classList.remove("hidden");
+  }
+
+  // Show notes section when there's any workout activity
+  if (hasAny) {
+    notesSection.classList.remove("hidden");
+  } else {
+    notesSection.classList.add("hidden");
+  }
+
+  workout.forEach((ex, idx) => {
+    const card = document.createElement("div");
+    card.className = "exercise-card";
+
+    const machine = ex.machine_id ? ` (${ex.machine_id})` : "";
+    const setsHtml = ex.sets_detail
+      .map((s) => (s.weight_kg ? `${s.reps}x${fmtWeight(s.weight_kg)}kg` : `${s.reps}`))
+      .join(", ");
+
+    card.innerHTML = `
+      <div class="exercise-card-header">
+        <span class="exercise-card-name">${ex.name}${machine}</span>
+        <button class="btn-remove btn-edit" title="Edit">&#9998;</button>
+      </div>
+      <div class="exercise-card-sets">${setsHtml}</div>
+    `;
+
+    card.querySelector(".btn-edit").addEventListener("click", (e) => {
+      e.stopPropagation();
+      editExercise(idx);
+    });
+
+    workoutExercises.appendChild(card);
+  });
+}
+
+// Reopen a saved exercise to add/remove sets
+function editExercise(idx) {
+  // Finish any in-progress exercise first
+  if (currentExercise && getCurrentSets().length > 0) {
+    finishCurrentExercise();
+  }
+
+  const ex = workout[idx];
+  if (!ex) return;
+
+  // Pop it back into the current-exercise slot
+  workout.splice(idx, 1);
+  currentExercise = { name: ex.name, machine_id: ex.machine_id };
+  setsSection.classList.remove("hidden");
+  setsLabel.textContent = ex.name;
+  setsList.innerHTML = "";
+  (ex.sets_detail || []).forEach((s) => addSetToDOM(s.reps, s.weight_kg));
+  // Pre-fill weight input with last set's weight for convenience
+  const lastWeight = ex.sets_detail?.length ? ex.sets_detail[ex.sets_detail.length - 1].weight_kg : 0;
+  weightInput.value = lastWeight ? String(lastWeight) : "";
+  repsInput.value = "";
+  repsInput.focus();
+  btnDeleteExercise.classList.remove("hidden");
+
+  renderWorkout();
+  tg.HapticFeedback.selectionChanged();
+  saveDraft();
+}
+
+// ── Edit saved workout ──────────────────────────────────────────
+
+function editSavedWorkout(workoutData) {
+  // Clear any in-progress work
+  if (currentExercise && getCurrentSets().length > 0) {
+    finishCurrentExercise();
+  }
+  workout = [];
+  currentExercise = null;
+  setsList.innerHTML = "";
+  setsSection.classList.add("hidden");
+
+  // Load all exercises from the saved workout
+  (workoutData.superset_groups || []).forEach((group) => {
+    group.forEach((ex) => {
+      workout.push({
+        name: ex.name,
+        machine_id: ex.machine_id || null,
+        sets_detail: ex.sets_detail || [],
+        sets: ex.sets || 0,
+        reps: ex.reps || 0,
+        weight_kg: ex.weight_kg || 0,
+      });
+    });
+  });
+
+  // Set note
+  noteInput.value = workoutData.note || "";
+
+  // Mark as editing
+  editingWorkoutId = workoutData.id;
+
+  // Switch to Log tab
+  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  document.querySelector('.tab[data-view="log"]').classList.add("active");
+  document.getElementById("view-log").classList.add("active");
+
+  renderWorkout();
+  updateEditingUI();
+  saveDraft();
+  tg.HapticFeedback.impactOccurred("medium");
+}
+
+function updateEditingUI() {
+  const banner = document.getElementById("editing-banner");
+  if (editingWorkoutId) {
+    if (banner) banner.classList.remove("hidden");
+    btnSaveWorkout.textContent = "Update Workout";
+  } else {
+    if (banner) banner.classList.add("hidden");
+    btnSaveWorkout.textContent = "Save Workout";
+  }
+}
+
+function cancelEdit() {
+  editingWorkoutId = null;
+  workout = [];
+  currentExercise = null;
+  noteInput.value = "";
+  setsList.innerHTML = "";
+  setsSection.classList.add("hidden");
+  renderWorkout();
+  updateEditingUI();
+  clearDraft();
+
+  // Switch to history tab
+  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  document.querySelector('.tab[data-view="history"]').classList.add("active");
+  document.getElementById("view-history").classList.add("active");
+  loadHistory();
+  tg.HapticFeedback.selectionChanged();
+}
+
+document.getElementById("btn-cancel-edit")?.addEventListener("click", cancelEdit);
+
+// Save workout
+btnSaveWorkout.addEventListener("click", async () => {
+  if (currentExercise && getCurrentSets().length > 0) {
+    finishCurrentExercise();
+  }
+
+  if (workout.length === 0) {
+    showToast("Add at least one exercise");
+    tg.HapticFeedback.notificationOccurred("error");
+    return;
+  }
+
+  tg.HapticFeedback.impactOccurred("medium");
+
+  const superset_groups = workout.map((ex) => [ex]);
+  const note = noteInput.value.trim() || null;
+
+  try {
+    let data;
+    if (editingWorkoutId) {
+      data = await api("PUT", `/workouts/${editingWorkoutId}`, { superset_groups, note });
+      showToast("Workout updated!");
+    } else {
+      data = await api("POST", "/workouts", { superset_groups, note });
+      showToast("Workout #" + data.workout_id + " saved!");
+    }
+    workout = [];
+    currentExercise = null;
+    editingWorkoutId = null;
+    noteInput.value = "";
+    renderWorkout();
+    updateEditingUI();
+    clearDraft();
+    tg.HapticFeedback.notificationOccurred("success");
+  } catch (e) {
+    showToast(e.message);
+    tg.HapticFeedback.notificationOccurred("error");
+  }
+});
+
+// ── Raw text fallback ───────────────────────────────────────────
+document.getElementById("btn-save-raw").addEventListener("click", async () => {
   const raw = document.getElementById("inp-raw").value.trim();
   if (!raw) {
     showToast("Enter your workout first");
@@ -72,6 +592,7 @@ document.getElementById("btn-save").addEventListener("click", async () => {
   try {
     const data = await api("POST", "/workouts", { raw_text: raw });
     document.getElementById("inp-raw").value = "";
+    clearDraft();
     showToast("Workout #" + data.workout_id + " saved!");
     tg.HapticFeedback.notificationOccurred("success");
   } catch (e) {
@@ -80,40 +601,8 @@ document.getElementById("btn-save").addEventListener("click", async () => {
   }
 });
 
-// Load exercise name suggestions
-async function loadSuggestions() {
-  try {
-    const data = await api("GET", "/exercises");
-    const container = document.getElementById("suggestion-chips");
-    const wrapper = document.getElementById("suggestions");
-
-    if (!data.exercises || data.exercises.length === 0) {
-      wrapper.style.display = "none";
-      return;
-    }
-    wrapper.style.display = "block";
-    container.innerHTML = "";
-
-    data.exercises.slice(0, 20).forEach((name) => {
-      const chip = document.createElement("button");
-      chip.className = "chip";
-      chip.textContent = name;
-      chip.addEventListener("click", () => {
-        const textarea = document.getElementById("inp-raw");
-        const val = textarea.value;
-        const suffix = name + ": ";
-        textarea.value = val ? val + "\n" + suffix : suffix;
-        textarea.focus();
-        tg.HapticFeedback.selectionChanged();
-      });
-      container.appendChild(chip);
-    });
-  } catch (e) {
-    console.error("Failed to load suggestions", e);
-  }
-}
-
 // ── History View ────────────────────────────────────────────────
+let historyOffset = 0;
 
 async function loadHistory(append = false) {
   try {
@@ -146,13 +635,15 @@ async function loadHistory(append = false) {
         minute: "2-digit",
       });
 
-      // Calculate volume
       let volume = 0;
-      let totalSets = 0;
       (w.superset_groups || []).forEach((group) => {
         group.forEach((ex) => {
-          volume += ex.sets * ex.reps * ex.weight_kg;
-          totalSets += ex.sets;
+          const details = ex.sets_detail || [];
+          if (details.length > 0) {
+            details.forEach((s) => { volume += s.reps * s.weight_kg; });
+          } else {
+            volume += ex.sets * ex.reps * ex.weight_kg;
+          }
         });
       });
 
@@ -166,10 +657,22 @@ async function loadHistory(append = false) {
         }
         group.forEach((ex) => {
           const machine = ex.machine_id ? ` <span class="ex-machine">(${ex.machine_id})</span>` : "";
+          const details = ex.sets_detail || [];
+          let detailStr;
+          if (details.length > 0 && !details.every(
+            (d) => d.reps === details[0].reps && d.weight_kg === details[0].weight_kg
+          )) {
+            detailStr = details.map((d) =>
+              d.weight_kg ? `${d.reps}x${fmtWeight(d.weight_kg)}kg` : `${d.reps}`
+            ).join(", ");
+          } else {
+            const w = ex.weight_kg;
+            detailStr = w ? `${ex.sets}x${ex.reps}x${fmtWeight(w)}kg` : `${ex.sets}x${ex.reps}`;
+          }
           groupsHtml += `
             <div class="history-exercise">
               <span class="ex-name">${ex.name}</span>${machine}
-              <span class="ex-detail"> — ${ex.sets}x${ex.reps}x${ex.weight_kg}kg</span>
+              <span class="ex-detail"> &mdash; ${detailStr}</span>
             </div>`;
         });
         groupsHtml += "</div>";
@@ -178,10 +681,19 @@ async function loadHistory(append = false) {
       card.innerHTML = `
         <div class="history-header">
           <span class="history-date">${dateStr}</span>
-          <span class="history-volume">${Math.round(volume)} kg vol</span>
+          <div class="history-header-right">
+            <span class="history-volume">${Math.round(volume)} kg vol</span>
+            <button class="btn-remove btn-edit btn-history-edit" title="Edit">&#9998;</button>
+          </div>
         </div>
         ${groupsHtml}
       `;
+
+      card.querySelector(".btn-history-edit").addEventListener("click", (e) => {
+        e.stopPropagation();
+        editSavedWorkout(w);
+      });
+
       container.appendChild(card);
     });
 
@@ -204,7 +716,7 @@ async function loadStats() {
     const container = document.getElementById("stats-content");
 
     if (data.total_workouts === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>No workouts yet</p></div>';
+      container.innerHTML = '<div class="empty-state"><p>No workouts yet</p></div>';
       return;
     }
 
@@ -233,10 +745,21 @@ async function loadStats() {
   }
 }
 
+// ── Helpers ─────────────────────────────────────────────────────
+function fmtWeight(w) {
+  return w === Math.floor(w) ? Math.floor(w).toString() : w.toString();
+}
+
 // ── Init ────────────────────────────────────────────────────────
 async function init() {
   if (!userId) return;
-  await loadSuggestions();
+  try {
+    const data = await api("GET", "/exercises");
+    knownExercises = data.exercises || [];
+  } catch (e) {
+    console.error("Failed to load exercises", e);
+  }
+  restoreDraft();
 }
 
 init();

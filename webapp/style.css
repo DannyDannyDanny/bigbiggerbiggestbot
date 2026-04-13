@@ -14,6 +14,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.hidden { display: none !important; }
+
 /* ── Tabs ────────────────────────────────────────────────────── */
 
 #tabs {
@@ -86,6 +88,46 @@ body {
   border: 1.5px solid var(--tg-theme-button-color, #3390ec);
 }
 
+.btn-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: none;
+  background: var(--tg-theme-button-color, #3390ec);
+  color: var(--tg-theme-button-text-color, #fff);
+  font-size: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
+}
+
+.btn-icon:active { opacity: 0.7; }
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--tg-theme-link-color, #3390ec);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.btn-remove {
+  background: none;
+  border: none;
+  color: var(--tg-theme-hint-color, #999);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.btn-remove:active { opacity: 0.5; }
+
 /* ── Inputs ──────────────────────────────────────────────────── */
 
 .input {
@@ -106,6 +148,12 @@ body {
   border-color: var(--tg-theme-button-color, #3390ec);
 }
 
+.input-small {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
 .hint {
   font-size: 12px;
   color: var(--tg-theme-hint-color, #999);
@@ -113,35 +161,191 @@ body {
   line-height: 1.4;
 }
 
-/* ── Suggestion chips ────────────────────────────────────────── */
+/* ── Structured log: exercise name row ──────────────────────── */
 
-.section-label {
-  font-size: 12px;
-  font-weight: 600;
+.exercise-name-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.exercise-name-row .input { flex: 1; }
+
+/* ── Autocomplete ────────────────────────────────────────────── */
+
+.autocomplete-list {
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.2s, opacity 0.2s;
+}
+
+.autocomplete-list.visible {
+  max-height: 280px;
+  opacity: 1;
+  margin-top: 4px;
+  border: 1px solid var(--tg-theme-hint-color, #999)33;
+}
+
+.autocomplete-item {
+  padding: 10px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--tg-theme-bg-color, #fff);
+  border-bottom: 1px solid var(--tg-theme-hint-color, #999)22;
+}
+
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:active { background: var(--tg-theme-secondary-bg-color, #f0f0f0); }
+
+/* ── Sets section ────────────────────────────────────────────── */
+
+.sets-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--tg-theme-hint-color, #999)22;
+}
+
+.sets-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-danger {
+  color: #e53935 !important;
+  font-size: 12px !important;
+}
+
+.set-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.set-separator {
   color: var(--tg-theme-hint-color, #999);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.set-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tg-theme-hint-color, #999)15;
+}
+
+.set-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── Exercise cards (workout preview) ────────────────────────── */
+
+.exercise-card {
+  background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+  border-radius: 12px;
+  padding: 12px 16px;
   margin-bottom: 8px;
 }
 
-#suggestion-chips {
+.exercise-card-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 16px;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.chip {
-  padding: 6px 12px;
-  border-radius: 16px;
+.exercise-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-edit {
+  font-size: 14px !important;
+}
+
+.exercise-card-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.exercise-card-sets {
   font-size: 13px;
-  background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-  color: var(--tg-theme-text-color, #000);
-  border: 1px solid var(--tg-theme-hint-color, #999)33;
-  cursor: pointer;
+  color: var(--tg-theme-hint-color, #999);
+  margin-top: 4px;
 }
 
-.chip:active { opacity: 0.7; }
+/* ── Editing banner ──────────────────────────────────────────── */
+
+.editing-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: var(--tg-theme-button-color, #3390ec)15;
+  border: 1px solid var(--tg-theme-button-color, #3390ec)40;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tg-theme-button-color, #3390ec);
+}
+
+/* ── Notes ───────────────────────────────────────────────────── */
+
+#notes-section {
+  margin-bottom: 12px;
+}
+
+#notes-section .input {
+  font-size: 14px;
+  resize: none;
+}
+
+/* ── Raw text collapsible ─────────────────────────────────────── */
+
+.raw-section {
+  margin-top: 8px;
+}
+
+.raw-toggle {
+  font-size: 13px;
+  color: var(--tg-theme-link-color, #3390ec);
+  cursor: pointer;
+  padding: 8px 0;
+  list-style: none;
+  text-align: center;
+}
+
+.raw-toggle::-webkit-details-marker { display: none; }
+
+.raw-toggle::before {
+  content: "\25B6  ";
+  font-size: 10px;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+details[open] .raw-toggle::before {
+  transform: rotate(90deg);
+}
+
+.raw-card {
+  margin-top: 8px;
+}
+
+/* ── Section labels ──────────────────────────────────────────── */
+
+.section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tg-theme-button-color, #3390ec);
+  margin-bottom: 8px;
+}
 
 /* ── History cards ───────────────────────────────────────────── */
 
@@ -164,10 +368,20 @@ body {
   font-weight: 600;
 }
 
+.history-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .history-volume {
   font-size: 13px;
   font-weight: 600;
   color: var(--tg-theme-button-color, #3390ec);
+}
+
+.btn-history-edit {
+  font-size: 14px !important;
 }
 
 .history-group {
@@ -233,7 +447,6 @@ body {
 /* ── Empty state ─────────────────────────────────────────────── */
 
 .empty-state { text-align: center; padding: 48px 16px; }
-.empty-icon { font-size: 48px; margin-bottom: 12px; }
 .empty-state p { color: var(--tg-theme-hint-color, #999); font-size: 16px; }
 
 /* ── Toast ───────────────────────────────────────────────────── */

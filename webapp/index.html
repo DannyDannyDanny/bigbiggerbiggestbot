@@ -17,25 +17,65 @@
 
     <!-- ═══ LOG VIEW ═══ -->
     <div id="view-log" class="view active">
-      <div class="card" id="text-input-card">
-        <textarea id="inp-raw" class="input" rows="6"
-          placeholder="Bench press: 4x8x35&#10;Lateral raise: 4x8x4&#10;&#10;Squats: 5x5x30"></textarea>
-        <div class="hint">Same format as the bot. Blank line = new group. Consecutive lines = superset.</div>
-        <button id="btn-save" class="btn btn-primary">Save Workout</button>
+
+      <!-- Editing banner -->
+      <div id="editing-banner" class="editing-banner hidden">
+        <span>Editing workout</span>
+        <button id="btn-cancel-edit" class="btn-link">Cancel</button>
       </div>
 
-      <!-- Quick-add from history -->
-      <div id="suggestions" style="display:none">
-        <div class="section-label">Recent exercises</div>
-        <div id="suggestion-chips"></div>
+      <!-- Current workout exercises list -->
+      <div id="workout-exercises"></div>
+
+      <!-- Add exercise form -->
+      <div class="card" id="add-exercise-card">
+        <div class="exercise-name-row">
+          <input type="text" id="inp-exercise-name" class="input" placeholder="Exercise name" autocomplete="off" />
+          <button id="btn-add-exercise" class="btn-icon" title="Add exercise">+</button>
+        </div>
+        <div id="autocomplete-list" class="autocomplete-list"></div>
+
+        <!-- Sets for current exercise (shown after name is entered) -->
+        <div id="sets-section" class="sets-section hidden">
+          <div class="sets-header">
+            <div class="section-label" id="sets-label">Sets</div>
+            <button id="btn-delete-exercise" class="btn-link btn-danger hidden">Remove exercise</button>
+          </div>
+          <div id="sets-list"></div>
+          <div class="set-input-row">
+            <input type="text" id="inp-reps" class="input input-small" placeholder="Reps" inputmode="numeric" pattern="[0-9]*" />
+            <span class="set-separator">x</span>
+            <input type="text" id="inp-weight" class="input input-small" placeholder="kg" inputmode="decimal" />
+            <button id="btn-add-set" class="btn-icon" title="Add set">+</button>
+          </div>
+        </div>
       </div>
+
+      <!-- Notes -->
+      <div id="notes-section" class="hidden">
+        <textarea id="inp-note" class="input" rows="2" placeholder="Notes (optional)"></textarea>
+      </div>
+
+      <!-- Save workout button -->
+      <button id="btn-save-workout" class="btn btn-primary hidden">Save Workout</button>
+
+      <!-- Raw text collapsible section -->
+      <details id="raw-details" class="raw-section">
+        <summary class="raw-toggle">Paste as text</summary>
+        <div class="card raw-card">
+          <textarea id="inp-raw" class="input" rows="6"
+            placeholder="Bench press: 4x8x35&#10;Shoulder press (3032): 8x25, 5x35&#10;&#10;Squats: 5x5x30"></textarea>
+          <div class="hint">Same format as the bot. Blank line = new group.</div>
+          <button id="btn-save-raw" class="btn btn-primary">Save Workout</button>
+        </div>
+      </details>
     </div>
 
     <!-- ═══ HISTORY VIEW ═══ -->
     <div id="view-history" class="view">
       <div id="history-list"></div>
       <div id="no-history" class="empty-state">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon">&#x1F4CB;</div>
         <p>No workouts yet</p>
       </div>
       <button id="btn-load-more" class="btn btn-secondary" style="display:none">Load more</button>
@@ -44,8 +84,8 @@
     <!-- ═══ STATS VIEW ═══ -->
     <div id="view-stats" class="view">
       <div id="stats-content" class="empty-state">
-        <div class="empty-icon">📊</div>
-        <p>Loading…</p>
+        <div class="empty-icon">&#x1F4CA;</div>
+        <p>Loading...</p>
       </div>
     </div>
   </div>
