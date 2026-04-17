@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout
+from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, save_feedback
 from parser import parse_workout, format_workout
 
 load_dotenv()
@@ -93,7 +93,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/history \u2014 view recent workouts\n"
         "/stats \u2014 quick summary\n"
         "/delete &lt;id&gt; \u2014 delete a workout\n"
-        "/export \u2014 export all data as JSON"
+        "/export \u2014 export all data as JSON\n"
+        "/feedback &lt;text&gt; \u2014 send feedback"
     )
 
     if WEBAPP_URL:
@@ -197,6 +198,21 @@ async def cmd_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = " ".join(context.args) if context.args else ""
+
+    if not text:
+        await update.message.reply_text(
+            "Usage: /feedback &lt;your feedback&gt;",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    save_feedback(user_id, text)
+    await update.message.reply_text("\U0001f4dd Feedback saved, thanks!")
+
+
 # ── Message handler (workout parsing) ───────────────────────────────────────
 
 
@@ -290,6 +306,7 @@ def main():
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("delete", cmd_delete))
     app.add_handler(CommandHandler("export", cmd_export))
+    app.add_handler(CommandHandler("feedback", cmd_feedback))
 
     # Handle all text messages (including forwarded ones)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

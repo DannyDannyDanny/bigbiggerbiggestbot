@@ -60,6 +60,13 @@ def init_db():
 
             CREATE INDEX IF NOT EXISTS idx_workouts_user
                 ON workouts(user_id, timestamp);
+
+            CREATE TABLE IF NOT EXISTS feedback (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL,
+                text        TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            );
         """)
 
         # Migrations
@@ -245,4 +252,24 @@ def export_workouts(user_id: int) -> list[dict]:
             ORDER BY w.timestamp DESC, sg.position, e.position
         """, (user_id,)).fetchall()
 
+        return [dict(r) for r in rows]
+
+
+def save_feedback(user_id: int, text: str) -> int:
+    """Save user feedback. Returns the feedback id."""
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO feedback (user_id, text) VALUES (?, ?)",
+            (user_id, text),
+        )
+        return cur.lastrowid
+
+
+def get_feedback(limit: int = 50) -> list[dict]:
+    """Get all feedback, newest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, user_id, text, created_at FROM feedback ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
         return [dict(r) for r in rows]
