@@ -1,4 +1,4 @@
-# BigBiggerBiggestBot
+# BigBiggerBiggestBot 💪
 
 A Telegram bot for logging gym workouts, with an embedded Mini App.
 
