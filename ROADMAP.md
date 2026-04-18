@@ -7,7 +7,7 @@
 - [x] **#1** Hide "next exercise" affordance until current exercise has ≥1 set
 - [x] Version display in Mini App footer — format `YYYY-MM-DD <short-sha>`. Primary path uses `git log`, pure-Python fallback parses `.git/HEAD` + loose commit objects for environments without git on PATH.
 - [x] ~~Semantic versioning tags — start tagging releases (`v0.1.0`, `v0.2.0`, ...) so the footer shows a human version instead of a SHA.~~ Decided against — keeping `YYYY-MM-DD <short-sha>` format.
-- [ ] **#7** Per-user workout numbering display (global ID stays as real key, just display transform)
+- [x] **#7** Per-user workout numbering display (global ID stays as real key, just display transform). `/delete <n>` now uses the per-user number too. Deleting renumbers later workouts down.
 
 ## Soon
 - [ ] **#2** Superset support in structured editor — backend already supports it; UI needs a "group with previous" toggle or drag-to-group
