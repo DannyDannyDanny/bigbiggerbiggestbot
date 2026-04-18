@@ -4,8 +4,9 @@
 - [x] **#6** Can't save workout with only one exercise — investigate structured editor save path
 
 ## Next
-- [ ] **#1** Hide "next exercise" affordance until current exercise has ≥1 set
-- [ ] Semantic versioning — tag releases (`v0.1.0`, `v0.2.0`, ...) and display current version string in the Mini App. *Priority: needed to confirm which version the live bot is running.*
+- [x] **#1** Hide "next exercise" affordance until current exercise has ≥1 set
+- [x] Version display in Mini App footer — SHA from `git describe`, falls back to `.git/HEAD` when git isn't on PATH.
+- [ ] Semantic versioning tags — start tagging releases (`v0.1.0`, `v0.2.0`, ...) so the footer shows a human version instead of a SHA.
 - [ ] **#7** Per-user workout numbering display (global ID stays as real key, just display transform)
 
 ## Soon
