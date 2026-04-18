@@ -9,6 +9,8 @@ import io
 import json
 import logging
 import os
+import pathlib
+import subprocess
 from urllib.parse import parse_qs
 
 from aiohttp import web
@@ -21,6 +23,24 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+# ── Version (computed once at startup) ───────────────────────────
+
+def _compute_version() -> str:
+    """Return `git describe --tags --always --dirty`, or 'unknown'."""
+    try:
+        out = subprocess.run(
+            ["git", "describe", "--tags", "--always", "--dirty"],
+            cwd=pathlib.Path(__file__).parent,
+            capture_output=True, text=True, timeout=2, check=True,
+        )
+        return out.stdout.strip() or "unknown"
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        return "unknown"
+
+
+_VERSION = _compute_version()
 
 
 # ── Token (injected by start.py via env) ─────────────────────────
@@ -206,6 +226,11 @@ async def api_export_json(request: web.Request):
     return web.json_response({"records": data, "count": len(data)})
 
 
+async def api_version(request: web.Request):
+    """Return the running server version. Unauthenticated."""
+    return web.json_response({"version": _VERSION})
+
+
 @require_auth
 async def api_export_csv(request: web.Request):
     """Export all workouts as CSV."""
@@ -239,9 +264,9 @@ def create_app() -> web.Application:
     app.router.add_get("/api/stats", api_get_stats)
     app.router.add_get("/api/export/json", api_export_json)
     app.router.add_get("/api/export/csv", api_export_csv)
+    app.router.add_get("/api/version", api_version)
 
     # Serve the webapp/ folder
-    import pathlib
     webapp_dir = pathlib.Path(__file__).parent / "webapp"
 
     async def index_handler(request):

@@ -472,3 +472,15 @@ details[open] .raw-toggle::before {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
 }
+
+/* ── Footer / version badge ──────────────────────────────────── */
+
+#app-footer {
+  margin-top: 24px;
+  padding: 12px 16px 20px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--tg-theme-hint-color, #999);
+  opacity: 0.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

@@ -767,8 +767,22 @@ function fmtWeight(w) {
   return w === Math.floor(w) ? Math.floor(w).toString() : w.toString();
 }
 
+// ── Version badge ───────────────────────────────────────────────
+async function loadVersion() {
+  try {
+    const res = await fetch(API + "/version");
+    if (!res.ok) return;
+    const data = await res.json();
+    const badge = document.getElementById("version-badge");
+    if (badge && data.version) badge.textContent = data.version;
+  } catch (e) {
+    // Silent — footer just stays empty if unreachable
+  }
+}
+
 // ── Init ────────────────────────────────────────────────────────
 async function init() {
+  loadVersion();
   if (!userId) return;
   try {
     const data = await api("GET", "/exercises");
