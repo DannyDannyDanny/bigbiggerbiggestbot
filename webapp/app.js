@@ -138,6 +138,7 @@ function restoreDraft() {
       if (details) details.open = true;
     }
 
+    updateSaveButtonVisibility();
     return true;
   } catch (e) {
     console.warn("Failed to restore draft", e);
@@ -301,6 +302,7 @@ function addSetToDOM(reps, weight) {
   `;
   entry.querySelector(".btn-remove").addEventListener("click", () => {
     entry.remove();
+    updateSaveButtonVisibility();
     tg.HapticFeedback.selectionChanged();
     saveDraft();
   });
@@ -325,6 +327,7 @@ function addSet() {
   const weight = parseWeight(weightInput.value);
 
   addSetToDOM(reps, weight);
+  updateSaveButtonVisibility();
 
   repsInput.value = "";
   weightInput.value = weight ? String(weight) : "";
@@ -390,15 +393,16 @@ function finishCurrentExercise() {
   saveDraft();
 }
 
+function updateSaveButtonVisibility() {
+  const canSave = workout.length > 0 || getCurrentSets().length > 0;
+  btnSaveWorkout.classList.toggle("hidden", !canSave);
+}
+
 function renderWorkout() {
   workoutExercises.innerHTML = "";
   const hasAny = workout.length > 0 || currentExercise !== null;
 
-  if (workout.length === 0) {
-    btnSaveWorkout.classList.add("hidden");
-  } else {
-    btnSaveWorkout.classList.remove("hidden");
-  }
+  updateSaveButtonVisibility();
 
   // Show notes section when there's any workout activity
   if (hasAny) {
