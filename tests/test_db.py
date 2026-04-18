@@ -147,6 +147,70 @@ class TestDeleteWorkout:
         assert db.delete_workout(1, wid) is False  # already deleted
 
 
+# ── per-user numbering ───────────────────────────────────────────
+
+
+class TestUserNumbering:
+    def test_user_number_in_get_workouts(self, tmp_db):
+        t = lambda d: datetime(2024, 1, d, tzinfo=timezone.utc)
+        _save_simple(name="First", ts=t(1))
+        _save_simple(name="Second", ts=t(2))
+        _save_simple(name="Third", ts=t(3))
+        ws = db.get_workouts(1)  # newest first
+        assert [w["superset_groups"][0][0]["name"] for w in ws] == ["Third", "Second", "First"]
+        assert [w["user_number"] for w in ws] == [3, 2, 1]
+
+    def test_numbering_is_per_user(self, tmp_db):
+        t = lambda d: datetime(2024, 1, d, tzinfo=timezone.utc)
+        _save_simple(user_id=1, ts=t(1))
+        _save_simple(user_id=2, ts=t(1))
+        _save_simple(user_id=1, ts=t(2))
+        _save_simple(user_id=2, ts=t(2))
+        assert [w["user_number"] for w in db.get_workouts(1)] == [2, 1]
+        assert [w["user_number"] for w in db.get_workouts(2)] == [2, 1]
+
+    def test_numbering_skips_deleted(self, tmp_db):
+        t = lambda d: datetime(2024, 1, d, tzinfo=timezone.utc)
+        w1 = _save_simple(ts=t(1))
+        _save_simple(ts=t(2))
+        _save_simple(ts=t(3))
+        db.delete_workout(1, w1)
+        ws = db.get_workouts(1)  # now 2 workouts, both shift down
+        assert [w["user_number"] for w in ws] == [2, 1]
+
+    def test_get_user_workout_number(self, tmp_db):
+        t = lambda d: datetime(2024, 1, d, tzinfo=timezone.utc)
+        w1 = _save_simple(ts=t(1))
+        w2 = _save_simple(ts=t(2))
+        assert db.get_user_workout_number(1, w1) == 1
+        assert db.get_user_workout_number(1, w2) == 2
+
+    def test_get_user_workout_number_missing(self, tmp_db):
+        assert db.get_user_workout_number(1, 9999) is None
+
+    def test_get_user_workout_number_deleted(self, tmp_db):
+        wid = _save_simple()
+        db.delete_workout(1, wid)
+        assert db.get_user_workout_number(1, wid) is None
+
+    def test_resolve_user_number(self, tmp_db):
+        t = lambda d: datetime(2024, 1, d, tzinfo=timezone.utc)
+        w1 = _save_simple(ts=t(1))
+        w2 = _save_simple(ts=t(2))
+        assert db.resolve_user_number(1, 1) == w1
+        assert db.resolve_user_number(1, 2) == w2
+
+    def test_resolve_user_number_out_of_range(self, tmp_db):
+        _save_simple()
+        assert db.resolve_user_number(1, 0) is None
+        assert db.resolve_user_number(1, 99) is None
+        assert db.resolve_user_number(1, -1) is None
+
+    def test_resolve_user_number_wrong_user(self, tmp_db):
+        _save_simple(user_id=1)
+        assert db.resolve_user_number(user_id=2, user_number=1) is None
+
+
 # ── update_workout ───────────────────────────────────────────────
 
 

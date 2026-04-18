@@ -159,10 +159,15 @@ def delete_workout(user_id: int, workout_id: int) -> bool:
 
 
 def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
-    """Fetch recent non-deleted workouts for a user, newest first."""
+    """Fetch recent non-deleted workouts for a user, newest first.
+
+    Each workout includes a `user_number` — the per-user display rank when
+    ordered by timestamp ascending (1 = the user's first workout).
+    """
     with get_db() as conn:
         rows = conn.execute(
-            """SELECT id, timestamp, note, raw_text, created_at
+            """SELECT id, timestamp, note, raw_text, created_at,
+                      ROW_NUMBER() OVER (ORDER BY timestamp ASC, id ASC) AS user_number
                FROM workouts
                WHERE user_id = ? AND deleted_at IS NULL
                ORDER BY timestamp DESC
@@ -203,6 +208,40 @@ def get_workouts(user_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
             workouts.append(workout)
 
         return workouts
+
+
+def get_user_workout_number(user_id: int, workout_id: int) -> int | None:
+    """Return the per-user display number for a specific workout, or None
+    if the workout doesn't exist or is deleted.
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT user_number FROM (
+                   SELECT id, ROW_NUMBER() OVER (ORDER BY timestamp ASC, id ASC) AS user_number
+                   FROM workouts
+                   WHERE user_id = ? AND deleted_at IS NULL
+               )
+               WHERE id = ?""",
+            (user_id, workout_id),
+        ).fetchone()
+        return row["user_number"] if row else None
+
+
+def resolve_user_number(user_id: int, user_number: int) -> int | None:
+    """Map a per-user display number to the global workout id, or None."""
+    if user_number < 1:
+        return None
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT id FROM (
+                   SELECT id, ROW_NUMBER() OVER (ORDER BY timestamp ASC, id ASC) AS n
+                   FROM workouts
+                   WHERE user_id = ? AND deleted_at IS NULL
+               )
+               WHERE n = ?""",
+            (user_id, user_number),
+        ).fetchone()
+        return row["id"] if row else None
 
 
 def get_workout_count(user_id: int) -> int:

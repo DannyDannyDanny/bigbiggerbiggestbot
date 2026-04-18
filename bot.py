@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, save_feedback
+from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, save_feedback, get_user_workout_number, resolve_user_number
 from parser import parse_workout, format_workout
 
 load_dotenv()
@@ -92,7 +92,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Commands:</b>\n"
         "/history \u2014 view recent workouts\n"
         "/stats \u2014 quick summary\n"
-        "/delete &lt;id&gt; \u2014 delete a workout\n"
+        "/delete &lt;number&gt; \u2014 delete a workout (see /history)\n"
         "/export \u2014 export all data as JSON\n"
         "/feedback &lt;text&gt; \u2014 send feedback"
     )
@@ -121,7 +121,7 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = []
     for w in workouts:
         ts = datetime.fromisoformat(w["timestamp"])
-        header = f"\U0001f4c5 <b>{ts.strftime('%a %d %b %Y, %H:%M')}</b>  (#{w['id']})"
+        header = f"\U0001f4c5 <b>{ts.strftime('%a %d %b %Y, %H:%M')}</b>  (#{w['user_number']})"
         body = format_workout(w["superset_groups"])
         parts.append(f"{header}\n{body}")
 
@@ -155,23 +155,24 @@ async def cmd_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         await update.message.reply_text(
-            "Usage: /delete &lt;workout_id&gt;\n"
-            "Use /history to see workout IDs.",
+            "Usage: /delete &lt;number&gt;\n"
+            "Use /history to see workout numbers.",
             parse_mode=ParseMode.HTML,
         )
         return
 
     try:
-        workout_id = int(context.args[0])
+        user_number = int(context.args[0])
     except ValueError:
-        await update.message.reply_text("Workout ID must be a number.")
+        await update.message.reply_text("Workout number must be a number.")
         return
 
-    if delete_workout(user_id, workout_id):
-        await update.message.reply_text(f"\U0001f5d1 Workout #{workout_id} deleted.")
+    workout_id = resolve_user_number(user_id, user_number)
+    if workout_id is not None and delete_workout(user_id, workout_id):
+        await update.message.reply_text(f"\U0001f5d1 Workout #{user_number} deleted.")
     else:
         await update.message.reply_text(
-            f"Workout #{workout_id} not found (or not yours)."
+            f"Workout #{user_number} not found."
         )
 
 
@@ -247,6 +248,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     superset_dicts = [[ex.to_dict() for ex in group] for group in groups]
     workout_id = save_workout(user_id, timestamp, superset_dicts, raw_text=text)
+    user_number = get_user_workout_number(user_id, workout_id) or workout_id
 
     # Count totals for the confirmation
     total_exercises = sum(len(g) for g in groups)
@@ -256,7 +258,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ts_str = timestamp.strftime("%a %d %b %Y, %H:%M")
 
     confirm_parts = [
-        f"\u2705 <b>Workout #{workout_id} saved!</b>",
+        f"\u2705 <b>Workout #{user_number} saved!</b>",
         f"\U0001f4c5 {ts_str}" + (" (from forwarded message)" if is_forwarded else ""),
         f"\U0001f3cb\ufe0f {total_exercises} exercises, {total_sets} total sets",
     ]

@@ -17,7 +17,7 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 
-from db import init_db, get_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts
+from db import init_db, get_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -227,7 +227,11 @@ async def api_save_workout(request: web.Request):
             {"error": "Provide superset_groups or raw_text"}, status=400
         )
 
-    return web.json_response({"workout_id": workout_id}, status=201)
+    user_number = get_user_workout_number(request["user_id"], workout_id)
+    return web.json_response(
+        {"workout_id": workout_id, "user_number": user_number},
+        status=201,
+    )
 
 
 @require_auth
@@ -244,7 +248,8 @@ async def api_update_workout(request: web.Request):
     new_id = update_workout(request["user_id"], workout_id, superset_groups, note=note)
     if new_id is None:
         return web.json_response({"error": "Not found"}, status=404)
-    return web.json_response({"workout_id": new_id})
+    user_number = get_user_workout_number(request["user_id"], new_id)
+    return web.json_response({"workout_id": new_id, "user_number": user_number})
 
 
 @require_auth

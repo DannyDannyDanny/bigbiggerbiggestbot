@@ -580,7 +580,7 @@ btnSaveWorkout.addEventListener("click", async () => {
       showToast("Workout updated!");
     } else {
       data = await api("POST", "/workouts", { superset_groups, note });
-      showToast("Workout #" + data.workout_id + " saved!");
+      showToast("Workout #" + (data.user_number ?? data.workout_id) + " saved!");
     }
     workout = [];
     currentExercise = null;
@@ -610,7 +610,7 @@ document.getElementById("btn-save-raw").addEventListener("click", async () => {
     const data = await api("POST", "/workouts", { raw_text: raw });
     document.getElementById("inp-raw").value = "";
     clearDraft();
-    showToast("Workout #" + data.workout_id + " saved!");
+    showToast("Workout #" + (data.user_number ?? data.workout_id) + " saved!");
     tg.HapticFeedback.notificationOccurred("success");
   } catch (e) {
     showToast(e.message);
