@@ -13,6 +13,7 @@
 - [ ] Global exercise name suggestions — autocomplete should draw from all users' exercises, not just the current user's history.
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
 - [ ] Semantic versioning — tag releases (`v0.1.0`, `v0.2.0`, ...) and display current version string in the Mini App.
+- [ ] Interaction / event logging — structured audit of user actions (command usage, Mini App opens, per-set additions with timestamps). Foundation for the rest-timer and future telemetry.
 
 ## Later
 - [ ] **#8** Workout templates — save/load favorite workouts
@@ -20,7 +21,9 @@
 - [ ] Mini-app UI polish (loading states, skeleton screens)
 - [ ] News section — surface new features/fixes on release. Delivery TBD: Mini App panel, occasional bot broadcast, or both.
 - [ ] Profile / settings — per-user preferences (language, units, etc.)
+- [ ] Rest timer — show time since the last set was completed (depends on per-set timestamps from the interaction logging item; gated by a profile/settings toggle so users can turn it off).
 - [ ] Cardio tracking — separate data model (duration, distance, pace) alongside strength workouts
+- [ ] About section — Mini App panel with pre-alpha / use-at-own-risk disclaimer, version, license link.
 
 ## Later later
 - [ ] Per-exercise graphs/trends
