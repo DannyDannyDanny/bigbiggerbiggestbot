@@ -1,7 +1,7 @@
 # BigBiggerBiggestBot — Roadmap
 
 ## Immediate bugs
-- [ ] **#6** Can't save workout with only one exercise — investigate structured editor save path
+- [x] **#6** Can't save workout with only one exercise — investigate structured editor save path
 
 ## Next
 - [ ] **#1** Hide "next exercise" affordance until current exercise has ≥1 set
