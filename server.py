@@ -28,15 +28,33 @@ logger = logging.getLogger(__name__)
 # ── Version (computed once at startup) ───────────────────────────
 
 def _compute_version() -> str:
-    """Return `git describe --tags --always --dirty`, or 'unknown'."""
+    """Return `git describe --tags --always --dirty`, with a pure-Python
+    fallback for environments where the `git` binary isn't on PATH
+    (e.g. minimal systemd service environments on NixOS).
+    """
+    repo_root = pathlib.Path(__file__).parent
+
+    # Preferred: git describe (picks up tags + dirty state).
     try:
         out = subprocess.run(
             ["git", "describe", "--tags", "--always", "--dirty"],
-            cwd=pathlib.Path(__file__).parent,
+            cwd=repo_root,
             capture_output=True, text=True, timeout=2, check=True,
         )
-        return out.stdout.strip() or "unknown"
+        if out.stdout.strip():
+            return out.stdout.strip()
     except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        pass
+
+    # Fallback: resolve HEAD ourselves. No tags, no dirty detection, just SHA.
+    try:
+        head = (repo_root / ".git" / "HEAD").read_text().strip()
+        if head.startswith("ref: "):
+            sha = (repo_root / ".git" / head[5:]).read_text().strip()
+        else:
+            sha = head
+        return sha[:7] if sha else "unknown"
+    except OSError:
         return "unknown"
 
 
