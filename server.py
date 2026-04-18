@@ -11,6 +11,8 @@ import logging
 import os
 import pathlib
 import subprocess
+import zlib
+from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
 from aiohttp import web
@@ -27,17 +29,53 @@ logger = logging.getLogger(__name__)
 
 # ── Version (computed once at startup) ───────────────────────────
 
+def _resolve_ref(git_dir: pathlib.Path, ref: str) -> str | None:
+    """Resolve a ref name to its SHA, handling loose and packed refs."""
+    loose = git_dir / ref
+    if loose.is_file():
+        return loose.read_text().strip()
+    packed = git_dir / "packed-refs"
+    if packed.is_file():
+        for line in packed.read_text().splitlines():
+            if not line or line.startswith("#") or line.startswith("^"):
+                continue
+            parts = line.split(maxsplit=1)
+            if len(parts) == 2 and parts[1] == ref:
+                return parts[0]
+    return None
+
+
+def _read_commit_date_utc(git_dir: pathlib.Path, sha: str) -> str | None:
+    """Parse a loose commit object and return committer date as YYYY-MM-DD (UTC)."""
+    obj_path = git_dir / "objects" / sha[:2] / sha[2:]
+    if not obj_path.exists():
+        return None  # packed — skip; recent HEAD is usually loose
+    try:
+        raw = zlib.decompress(obj_path.read_bytes())
+        content = raw[raw.index(b"\0") + 1:].decode("utf-8", errors="replace")
+        for line in content.splitlines():
+            if line.startswith("committer "):
+                # "committer Name <email> <unix-ts> <tz>"
+                parts = line.rsplit(" ", 2)
+                if len(parts) == 3 and parts[1].lstrip("-").isdigit():
+                    ts = int(parts[1])
+                    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        return None
+    except (OSError, ValueError, zlib.error):
+        return None
+
+
 def _compute_version() -> str:
-    """Return `git describe --tags --always --dirty`, with a pure-Python
-    fallback for environments where the `git` binary isn't on PATH
-    (e.g. minimal systemd service environments on NixOS).
+    """Return '<YYYY-MM-DD> <short-sha>', with a pure-Python fallback for
+    environments where the `git` binary isn't on PATH (e.g. minimal
+    systemd service environments on NixOS).
     """
     repo_root = pathlib.Path(__file__).parent
 
-    # Preferred: git describe (picks up tags + dirty state).
+    # Preferred: git (%cs = committer date short, %h = short SHA).
     try:
         out = subprocess.run(
-            ["git", "describe", "--tags", "--always", "--dirty"],
+            ["git", "log", "-1", "--format=%cs %h"],
             cwd=repo_root,
             capture_output=True, text=True, timeout=2, check=True,
         )
@@ -46,14 +84,18 @@ def _compute_version() -> str:
     except (subprocess.SubprocessError, FileNotFoundError, OSError):
         pass
 
-    # Fallback: resolve HEAD ourselves. No tags, no dirty detection, just SHA.
+    # Fallback: resolve HEAD + read commit object for the date.
     try:
-        head = (repo_root / ".git" / "HEAD").read_text().strip()
-        if head.startswith("ref: "):
-            sha = (repo_root / ".git" / head[5:]).read_text().strip()
-        else:
-            sha = head
-        return sha[:7] if sha else "unknown"
+        git_dir = repo_root / ".git"
+        if not git_dir.is_dir():
+            return "unknown"  # worktree or unusual layout
+        head = (git_dir / "HEAD").read_text().strip()
+        sha = _resolve_ref(git_dir, head[5:]) if head.startswith("ref: ") else head
+        if not sha:
+            return "unknown"
+        short_sha = sha[:7]
+        date = _read_commit_date_utc(git_dir, sha)
+        return f"{date} {short_sha}" if date else short_sha
     except OSError:
         return "unknown"
 
