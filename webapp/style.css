@@ -166,7 +166,7 @@ body {
 .exercise-name-row {
   display: flex;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-top: 4px;
 }
 
 .exercise-name-row .input { flex: 1; }
