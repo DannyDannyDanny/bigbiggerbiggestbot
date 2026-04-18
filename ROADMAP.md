@@ -18,6 +18,9 @@
 - [ ] **#8** Workout templates — save/load favorite workouts
 - [ ] Per-exercise history — "show me all my squat sessions"
 - [ ] Mini-app UI polish (loading states, skeleton screens)
+- [ ] News section — surface new features/fixes on release. Delivery TBD: Mini App panel, occasional bot broadcast, or both.
+- [ ] Profile / settings — per-user preferences (language, units, etc.)
+- [ ] Cardio tracking — separate data model (duration, distance, pace) alongside strength workouts
 
 ## Later later
 - [ ] Per-exercise graphs/trends
