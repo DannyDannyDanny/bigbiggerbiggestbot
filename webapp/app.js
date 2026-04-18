@@ -138,7 +138,7 @@ function restoreDraft() {
       if (details) details.open = true;
     }
 
-    updateSaveButtonVisibility();
+    syncEditorUI();
     return true;
   } catch (e) {
     console.warn("Failed to restore draft", e);
@@ -181,6 +181,7 @@ let editingWorkoutId = null; // non-null when editing a saved workout
 // ── Structured Log View ─────────────────────────────────────────
 
 const nameInput = document.getElementById("inp-exercise-name");
+const nameInputRow = document.querySelector(".exercise-name-row");
 const btnAddExercise = document.getElementById("btn-add-exercise");
 const autocompleteList = document.getElementById("autocomplete-list");
 const setsSection = document.getElementById("sets-section");
@@ -273,7 +274,7 @@ function startExercise(name) {
   weightInput.value = "";
   repsInput.focus();
   notesSection.classList.remove("hidden");
-  btnDeleteExercise.classList.add("hidden");
+  syncEditorUI();
   tg.HapticFeedback.selectionChanged();
   saveDraft();
 }
@@ -302,7 +303,7 @@ function addSetToDOM(reps, weight) {
   `;
   entry.querySelector(".btn-remove").addEventListener("click", () => {
     entry.remove();
-    updateSaveButtonVisibility();
+    syncEditorUI();
     tg.HapticFeedback.selectionChanged();
     saveDraft();
   });
@@ -327,7 +328,7 @@ function addSet() {
   const weight = parseWeight(weightInput.value);
 
   addSetToDOM(reps, weight);
-  updateSaveButtonVisibility();
+  syncEditorUI();
 
   repsInput.value = "";
   weightInput.value = weight ? String(weight) : "";
@@ -365,7 +366,6 @@ btnDeleteExercise.addEventListener("click", () => {
   currentExercise = null;
   setsSection.classList.add("hidden");
   setsList.innerHTML = "";
-  btnDeleteExercise.classList.add("hidden");
   renderWorkout();
   tg.HapticFeedback.notificationOccurred("warning");
   saveDraft();
@@ -393,16 +393,30 @@ function finishCurrentExercise() {
   saveDraft();
 }
 
-function updateSaveButtonVisibility() {
-  const canSave = workout.length > 0 || getCurrentSets().length > 0;
+function syncEditorUI() {
+  const currentSetCount = getCurrentSets().length;
+  const canSave = workout.length > 0 || currentSetCount > 0;
   btnSaveWorkout.classList.toggle("hidden", !canSave);
+
+  // Hide the "add exercise" input while the current exercise has no sets
+  // yet — prevents accidentally discarding it by typing a new name.
+  const hideNameInput = currentExercise !== null && currentSetCount === 0;
+  nameInputRow.classList.toggle("hidden", hideNameInput);
+  if (hideNameInput) {
+    autocompleteList.innerHTML = "";
+    autocompleteList.classList.remove("visible");
+  }
+
+  // Escape hatch whenever a current exercise exists — needed now that the
+  // name input is sometimes hidden.
+  btnDeleteExercise.classList.toggle("hidden", currentExercise === null);
 }
 
 function renderWorkout() {
   workoutExercises.innerHTML = "";
   const hasAny = workout.length > 0 || currentExercise !== null;
 
-  updateSaveButtonVisibility();
+  syncEditorUI();
 
   // Show notes section when there's any workout activity
   if (hasAny) {
@@ -459,7 +473,6 @@ function editExercise(idx) {
   weightInput.value = lastWeight ? String(lastWeight) : "";
   repsInput.value = "";
   repsInput.focus();
-  btnDeleteExercise.classList.remove("hidden");
 
   renderWorkout();
   tg.HapticFeedback.selectionChanged();
