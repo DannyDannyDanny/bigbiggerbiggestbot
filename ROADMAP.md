@@ -5,7 +5,7 @@
 
 ## Next
 - [x] **#1** Hide "next exercise" affordance until current exercise has ≥1 set
-- [x] Version display in Mini App footer — SHA from `git describe`, falls back to `.git/HEAD` when git isn't on PATH.
+- [x] Version display in Mini App footer — format `YYYY-MM-DD <short-sha>`. Primary path uses `git log`, pure-Python fallback parses `.git/HEAD` + loose commit objects for environments without git on PATH.
 - [ ] Semantic versioning tags — start tagging releases (`v0.1.0`, `v0.2.0`, ...) so the footer shows a human version instead of a SHA.
 - [ ] **#7** Per-user workout numbering display (global ID stays as real key, just display transform)
 
