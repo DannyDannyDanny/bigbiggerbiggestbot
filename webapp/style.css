@@ -166,7 +166,6 @@ body {
 .exercise-name-row {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
 }
 
 .exercise-name-row .input { flex: 1; }
@@ -201,11 +200,7 @@ body {
 
 /* ── Sets section ────────────────────────────────────────────── */
 
-.sets-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--tg-theme-hint-color, #999)22;
-}
+/* .sets-section inherits .card styling; no additional rules needed. */
 
 .sets-header {
   display: flex;

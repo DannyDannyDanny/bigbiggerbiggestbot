@@ -27,23 +27,23 @@
       <!-- Current workout exercises list -->
       <div id="workout-exercises"></div>
 
-      <!-- Add exercise form -->
-      <div class="card" id="add-exercise-card">
-        <!-- Sets for current exercise (shown after name is entered) -->
-        <div id="sets-section" class="sets-section hidden">
-          <div class="sets-header">
-            <div class="section-label" id="sets-label">Sets</div>
-            <button id="btn-delete-exercise" class="btn-link btn-danger hidden">Remove exercise</button>
-          </div>
-          <div id="sets-list"></div>
-          <div class="set-input-row">
-            <input type="text" id="inp-reps" class="input input-small" placeholder="Reps" inputmode="numeric" pattern="[0-9]*" />
-            <span class="set-separator">x</span>
-            <input type="text" id="inp-weight" class="input input-small" placeholder="kg" inputmode="decimal" />
-            <button id="btn-add-set" class="btn-icon" title="Add set">+</button>
-          </div>
+      <!-- Current exercise card (visible after name is entered) -->
+      <div id="sets-section" class="card sets-section hidden">
+        <div class="sets-header">
+          <div class="section-label" id="sets-label">Sets</div>
+          <button id="btn-delete-exercise" class="btn-link btn-danger hidden">Remove exercise</button>
         </div>
+        <div id="sets-list"></div>
+        <div class="set-input-row">
+          <input type="text" id="inp-reps" class="input input-small" placeholder="Reps" inputmode="numeric" pattern="[0-9]*" />
+          <span class="set-separator">x</span>
+          <input type="text" id="inp-weight" class="input input-small" placeholder="kg" inputmode="decimal" />
+          <button id="btn-add-set" class="btn-icon" title="Add set">+</button>
+        </div>
+      </div>
 
+      <!-- Add next exercise -->
+      <div class="card" id="add-exercise-card">
         <div class="exercise-name-row">
           <input type="text" id="inp-exercise-name" class="input" placeholder="Exercise name" autocomplete="off" />
           <button id="btn-add-exercise" class="btn-icon" title="Add exercise">+</button>
