@@ -10,6 +10,7 @@
 ## Soon
 - [ ] **#2** Superset support in structured editor — backend already supports it; UI needs a "group with previous" toggle or drag-to-group
 - [ ] Exercise name standardization — OHP = shoulder press = military press. Aliases table.
+- [ ] Global exercise name suggestions — autocomplete should draw from all users' exercises, not just the current user's history.
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
 - [ ] Semantic versioning — tag releases (`v0.1.0`, `v0.2.0`, ...) and display current version string in the Mini App.
 
