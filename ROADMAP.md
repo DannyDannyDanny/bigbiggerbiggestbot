@@ -5,6 +5,7 @@
 
 ## Next
 - [ ] **#1** Hide "next exercise" affordance until current exercise has ≥1 set
+- [ ] Semantic versioning — tag releases (`v0.1.0`, `v0.2.0`, ...) and display current version string in the Mini App. *Priority: needed to confirm which version the live bot is running.*
 - [ ] **#7** Per-user workout numbering display (global ID stays as real key, just display transform)
 
 ## Soon
@@ -12,7 +13,6 @@
 - [ ] Exercise name standardization — OHP = shoulder press = military press. Aliases table.
 - [ ] Global exercise name suggestions — autocomplete should draw from all users' exercises, not just the current user's history.
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
-- [ ] Semantic versioning — tag releases (`v0.1.0`, `v0.2.0`, ...) and display current version string in the Mini App.
 - [ ] Interaction / event logging — structured audit of user actions (command usage, Mini App opens, per-set additions with timestamps). Foundation for the rest-timer and future telemetry.
 - [ ] Staging via shipyard — new features and fixes must be verified against the shipyard bot (separate Telegram bot) before merging to `main` and triggering the production deploy.
 
