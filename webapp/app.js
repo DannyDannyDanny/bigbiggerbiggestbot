@@ -785,10 +785,11 @@ async function loadHistory(append = false) {
 
       card.innerHTML = `
         <div class="history-header">
-          <span class="history-date">${dateStr}</span>
+          <span class="history-date">#${w.user_number} &middot; ${dateStr}</span>
           <div class="history-header-right">
             <span class="history-volume">${Math.round(volume)} kg vol</span>
             <button class="btn-remove btn-edit btn-history-edit" title="Edit">&#9998;</button>
+            <button class="btn-remove btn-history-delete" title="Delete">&#128465;</button>
           </div>
         </div>
         ${groupsHtml}
@@ -797,6 +798,11 @@ async function loadHistory(append = false) {
       card.querySelector(".btn-history-edit").addEventListener("click", (e) => {
         e.stopPropagation();
         editSavedWorkout(w);
+      });
+
+      card.querySelector(".btn-history-delete").addEventListener("click", (e) => {
+        e.stopPropagation();
+        confirmDeleteWorkout(w);
       });
 
       container.appendChild(card);
@@ -812,6 +818,28 @@ async function loadHistory(append = false) {
 document.getElementById("btn-load-more").addEventListener("click", () => {
   loadHistory(true);
 });
+
+function confirmDeleteWorkout(w) {
+  const label = "Workout #" + (w.user_number ?? w.id);
+  const prompt = "Delete " + label + "? This can't be undone.";
+  const onConfirm = async (ok) => {
+    if (!ok) return;
+    try {
+      await api("DELETE", "/workouts/" + w.id);
+      showToast(label + " deleted");
+      tg.HapticFeedback.notificationOccurred("success");
+      loadHistory();
+    } catch (e) {
+      showToast(e.message || "Delete failed");
+      tg.HapticFeedback.notificationOccurred("error");
+    }
+  };
+  if (tg && typeof tg.showConfirm === "function") {
+    tg.showConfirm(prompt, onConfirm);
+  } else {
+    onConfirm(window.confirm(prompt));
+  }
+}
 
 // ── Stats View ──────────────────────────────────────────────────
 

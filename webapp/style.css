@@ -392,6 +392,11 @@ details[open] .raw-toggle::before {
   font-size: 14px !important;
 }
 
+.btn-history-delete {
+  font-size: 14px !important;
+  color: var(--tg-theme-destructive-text-color, #d33) !important;
+}
+
 .history-group {
   margin-bottom: 8px;
 }
