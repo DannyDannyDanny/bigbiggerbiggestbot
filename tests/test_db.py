@@ -309,6 +309,40 @@ class TestEvents:
         assert result == -1
 
 
+# ── user settings ────────────────────────────────────────────────
+
+
+class TestSettings:
+    def test_default_empty(self, tmp_db):
+        assert db.get_settings(1) == {}
+
+    def test_update_creates(self, tmp_db):
+        result = db.update_settings(1, {"rest_timer": False})
+        assert result == {"rest_timer": False}
+        assert db.get_settings(1) == {"rest_timer": False}
+
+    def test_update_merges(self, tmp_db):
+        db.update_settings(1, {"rest_timer": False})
+        result = db.update_settings(1, {"units": "lb"})
+        assert result == {"rest_timer": False, "units": "lb"}
+
+    def test_update_overwrites_key(self, tmp_db):
+        db.update_settings(1, {"rest_timer": False})
+        db.update_settings(1, {"rest_timer": True})
+        assert db.get_settings(1)["rest_timer"] is True
+
+    def test_settings_are_per_user(self, tmp_db):
+        db.update_settings(1, {"rest_timer": False})
+        db.update_settings(2, {"rest_timer": True})
+        assert db.get_settings(1) == {"rest_timer": False}
+        assert db.get_settings(2) == {"rest_timer": True}
+
+    def test_patch_must_be_dict(self, tmp_db):
+        import pytest
+        with pytest.raises(TypeError):
+            db.update_settings(1, "not a dict")
+
+
 # ── update_workout ───────────────────────────────────────────────
 
 

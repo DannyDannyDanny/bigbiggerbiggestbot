@@ -13,6 +13,7 @@
       <button class="tab active" data-view="log">Log</button>
       <button class="tab" data-view="history">History</button>
       <button class="tab" data-view="stats">Stats</button>
+      <button class="tab" data-view="settings">Settings</button>
     </nav>
 
     <!-- ═══ LOG VIEW ═══ -->
@@ -89,6 +90,19 @@
       <div id="stats-content" class="empty-state">
         <div class="empty-icon">&#x1F4CA;</div>
         <p>Loading...</p>
+      </div>
+    </div>
+
+    <!-- ═══ SETTINGS VIEW ═══ -->
+    <div id="view-settings" class="view">
+      <div class="card">
+        <label class="settings-row">
+          <div class="settings-row-label">
+            <div class="settings-row-title">Rest timer</div>
+            <div class="settings-row-hint">Show time since the last set was logged.</div>
+          </div>
+          <input type="checkbox" id="setting-rest-timer" class="settings-toggle" checked />
+        </label>
       </div>
     </div>
 

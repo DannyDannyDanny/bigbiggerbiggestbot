@@ -17,7 +17,7 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 
-from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number, get_all_exercise_names, log_event
+from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number, get_all_exercise_names, log_event, get_settings, update_settings
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -303,6 +303,25 @@ async def api_version(request: web.Request):
 
 
 @require_auth
+async def api_get_settings(request: web.Request):
+    """Return the authenticated user's settings dict."""
+    return web.json_response({"settings": get_settings(request["user_id"])})
+
+
+@require_auth
+async def api_update_settings(request: web.Request):
+    """Merge a partial settings patch; returns the full updated settings."""
+    try:
+        body = await request.json()
+    except (ValueError, json.JSONDecodeError):
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "Body must be an object"}, status=400)
+    updated = update_settings(request["user_id"], body)
+    return web.json_response({"settings": updated})
+
+
+@require_auth
 async def api_log_event(request: web.Request):
     """Record a client-emitted event (Mini App telemetry)."""
     try:
@@ -352,6 +371,8 @@ def create_app() -> web.Application:
     app.router.add_get("/api/export/csv", api_export_csv)
     app.router.add_get("/api/version", api_version)
     app.router.add_post("/api/events", api_log_event)
+    app.router.add_get("/api/settings", api_get_settings)
+    app.router.add_put("/api/settings", api_update_settings)
 
     # Serve the webapp/ folder
     webapp_dir = pathlib.Path(__file__).parent / "webapp"

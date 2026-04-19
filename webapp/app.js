@@ -203,6 +203,12 @@ let currentExercise = null;
 let editingWorkoutId = null; // non-null when editing a saved workout
 let lastSetAt = null;        // ms-epoch of most recent addSet, or null
 let restTimerInterval = null;
+let settings = { rest_timer: true };
+
+function settingEnabled(key, def = true) {
+  const v = settings[key];
+  return v === undefined ? def : !!v;
+}
 
 // ── Rest timer ──────────────────────────────────────────────────
 function _fmtRest(ms) {
@@ -216,7 +222,7 @@ function updateRestTimer() {
   const el = document.getElementById("rest-timer");
   if (!el) return;
   const setCount = setsList ? setsList.querySelectorAll(".set-entry").length : 0;
-  if (lastSetAt === null || !currentExercise || setCount === 0) {
+  if (!settingEnabled("rest_timer") || lastSetAt === null || !currentExercise || setCount === 0) {
     el.classList.add("hidden");
     return;
   }
@@ -883,6 +889,40 @@ function fmtWeight(w) {
   return w === Math.floor(w) ? Math.floor(w).toString() : w.toString();
 }
 
+// ── Settings ────────────────────────────────────────────────────
+async function loadSettings() {
+  if (!userId) return;
+  try {
+    const data = await api("GET", "/settings");
+    settings = { rest_timer: true, ...(data.settings || {}) };
+    applySettingsToUI();
+    updateRestTimer();
+  } catch (e) {
+    console.error("Failed to load settings", e);
+  }
+}
+
+function applySettingsToUI() {
+  const restToggle = document.getElementById("setting-rest-timer");
+  if (restToggle) restToggle.checked = settingEnabled("rest_timer");
+}
+
+async function saveSetting(key, value) {
+  // Optimistic: update locally first, then sync.
+  settings[key] = value;
+  updateRestTimer();
+  try {
+    await api("PUT", "/settings", { [key]: value });
+  } catch (e) {
+    showToast("Could not save setting");
+    console.error(e);
+  }
+}
+
+document.getElementById("setting-rest-timer")?.addEventListener("change", (e) => {
+  saveSetting("rest_timer", e.target.checked);
+});
+
 // ── Version badge ───────────────────────────────────────────────
 async function loadVersion() {
   try {
@@ -901,6 +941,7 @@ async function init() {
   loadVersion();
   if (!userId) return;
   logEvent("miniapp.open");
+  loadSettings();  // fire-and-forget; UI updates when ready
   try {
     const data = await api("GET", "/exercises");
     knownExercises = data.exercises || [];

@@ -80,6 +80,12 @@ def init_db():
                 ON events(user_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_events_kind_created
                 ON events(kind, created_at);
+
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id     INTEGER PRIMARY KEY,
+                data        TEXT    NOT NULL DEFAULT '{}',
+                updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            );
         """)
 
         # Migrations
@@ -371,6 +377,38 @@ def get_events(
                     pass
             out.append(d)
         return out
+
+
+def get_settings(user_id: int) -> dict:
+    """Return the user's settings dict (empty dict if none stored)."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT data FROM user_settings WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    if not row:
+        return {}
+    try:
+        return json.loads(row["data"]) or {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def update_settings(user_id: int, patch: dict) -> dict:
+    """Merge `patch` into the user's settings and return the new full dict."""
+    if not isinstance(patch, dict):
+        raise TypeError("patch must be a dict")
+    current = get_settings(user_id)
+    current.update(patch)
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO user_settings (user_id, data, updated_at)
+               VALUES (?, ?, datetime('now'))
+               ON CONFLICT(user_id) DO UPDATE SET
+                   data = excluded.data,
+                   updated_at = excluded.updated_at""",
+            (user_id, json.dumps(current)),
+        )
+    return current
 
 
 def save_feedback(user_id: int, text: str) -> int:
