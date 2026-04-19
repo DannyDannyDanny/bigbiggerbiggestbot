@@ -23,7 +23,7 @@
 - [ ] Mini-app UI polish (loading states, skeleton screens)
 - [ ] News section — surface new features/fixes on release. Delivery TBD: Mini App panel, occasional bot broadcast, or both.
 - [ ] Profile / settings — per-user preferences (language, units, etc.)
-- [ ] Rest timer — show time since the last set was completed (depends on per-set timestamps from the interaction logging item; gated by a profile/settings toggle so users can turn it off).
+- [x] Rest timer — shows mm:ss since the last set in the current exercise. Client-side state; resets per exercise; survives draft restore. Settings-toggle gate TBD when profile/settings lands.
 - [ ] Cardio tracking — separate data model (duration, distance, pace) alongside strength workouts
 - [ ] About section — Mini App panel with pre-alpha / use-at-own-risk disclaimer, version, license link.
 
