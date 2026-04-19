@@ -12,7 +12,7 @@
 ## Soon
 - [ ] **#2** Superset support in structured editor — backend already supports it; UI needs a "group with previous" toggle or drag-to-group
 - [ ] Exercise name standardization — OHP = shoulder press = military press. Aliases table.
-- [ ] Global exercise name suggestions — autocomplete should draw from all users' exercises, not just the current user's history.
+- [x] Global exercise name suggestions — autocomplete draws from all users' exercises, ordered by popularity, case-insensitively grouped.
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
 - [ ] Interaction / event logging — structured audit of user actions (command usage, Mini App opens, per-set additions with timestamps). Foundation for the rest-timer and future telemetry.
 - [ ] Staging via shipyard — new features and fixes must be verified against the shipyard bot (separate Telegram bot) before merging to `main` and triggering the production deploy.
