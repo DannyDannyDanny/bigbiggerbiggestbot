@@ -208,6 +208,19 @@ body {
   align-items: center;
 }
 
+.sets-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.rest-timer {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #999);
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-danger {
   color: #e53935 !important;
   font-size: 12px !important;

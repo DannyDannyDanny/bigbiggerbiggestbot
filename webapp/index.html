@@ -30,7 +30,10 @@
       <!-- Current exercise card (visible after name is entered) -->
       <div id="sets-section" class="card sets-section hidden">
         <div class="sets-header">
-          <div class="section-label" id="sets-label">Sets</div>
+          <div class="sets-header-left">
+            <div class="section-label" id="sets-label">Sets</div>
+            <span id="rest-timer" class="rest-timer hidden" aria-label="Time since last set">00:00</span>
+          </div>
           <button id="btn-delete-exercise" class="btn-link btn-danger hidden">Remove exercise</button>
         </div>
         <div id="sets-list"></div>

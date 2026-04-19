@@ -78,6 +78,7 @@ function saveDraft() {
       editingWorkoutId,
       activeView: document.querySelector(".tab.active")?.dataset.view || "log",
       rawDetailsOpen: document.getElementById("raw-details")?.open || false,
+      lastSetAt,
       savedAt: Date.now(),
     };
     localStorage.setItem(draftKey(), JSON.stringify(draft));
@@ -156,6 +157,11 @@ function restoreDraft() {
       if (details) details.open = true;
     }
 
+    // Resume rest timer if it was running
+    if (currentExercise && getCurrentSets().length > 0 && draft.lastSetAt) {
+      resumeRestTimer(draft.lastSetAt);
+    }
+
     syncEditorUI();
     return true;
   } catch (e) {
@@ -195,6 +201,55 @@ let workout = [];
 let knownExercises = [];
 let currentExercise = null;
 let editingWorkoutId = null; // non-null when editing a saved workout
+let lastSetAt = null;        // ms-epoch of most recent addSet, or null
+let restTimerInterval = null;
+
+// ── Rest timer ──────────────────────────────────────────────────
+function _fmtRest(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+
+function updateRestTimer() {
+  const el = document.getElementById("rest-timer");
+  if (!el) return;
+  const setCount = setsList ? setsList.querySelectorAll(".set-entry").length : 0;
+  if (lastSetAt === null || !currentExercise || setCount === 0) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.remove("hidden");
+  el.textContent = _fmtRest(Date.now() - lastSetAt);
+}
+
+function startRestTimer() {
+  lastSetAt = Date.now();
+  if (!restTimerInterval) {
+    restTimerInterval = setInterval(updateRestTimer, 1000);
+  }
+  updateRestTimer();
+}
+
+function stopRestTimer() {
+  lastSetAt = null;
+  if (restTimerInterval) {
+    clearInterval(restTimerInterval);
+    restTimerInterval = null;
+  }
+  updateRestTimer();
+}
+
+function resumeRestTimer(ts) {
+  // Called during draft restore when lastSetAt was persisted.
+  if (typeof ts !== "number" || !Number.isFinite(ts)) return;
+  lastSetAt = ts;
+  if (!restTimerInterval) {
+    restTimerInterval = setInterval(updateRestTimer, 1000);
+  }
+  updateRestTimer();
+}
 
 // ── Structured Log View ─────────────────────────────────────────
 
@@ -292,6 +347,7 @@ function startExercise(name) {
   weightInput.value = "";
   repsInput.focus();
   notesSection.classList.remove("hidden");
+  stopRestTimer();
   syncEditorUI();
   tg.HapticFeedback.selectionChanged();
   saveDraft();
@@ -322,6 +378,7 @@ function addSetToDOM(reps, weight) {
   entry.querySelector(".btn-remove").addEventListener("click", () => {
     entry.remove();
     syncEditorUI();
+    updateRestTimer();
     tg.HapticFeedback.selectionChanged();
     saveDraft();
   });
@@ -347,6 +404,7 @@ function addSet() {
 
   addSetToDOM(reps, weight);
   syncEditorUI();
+  startRestTimer();
 
   logEvent("set.add", {
     exercise: currentExercise?.name || null,
@@ -390,6 +448,7 @@ btnDeleteExercise.addEventListener("click", () => {
   currentExercise = null;
   setsSection.classList.add("hidden");
   setsList.innerHTML = "";
+  stopRestTimer();
   renderWorkout();
   tg.HapticFeedback.notificationOccurred("warning");
   saveDraft();
@@ -413,6 +472,7 @@ function finishCurrentExercise() {
   currentExercise = null;
   setsSection.classList.add("hidden");
   setsList.innerHTML = "";
+  stopRestTimer();
   renderWorkout();
   saveDraft();
 }
@@ -498,6 +558,7 @@ function editExercise(idx) {
   repsInput.value = "";
   repsInput.focus();
 
+  stopRestTimer();
   renderWorkout();
   tg.HapticFeedback.selectionChanged();
   saveDraft();
@@ -514,6 +575,7 @@ function editSavedWorkout(workoutData) {
   currentExercise = null;
   setsList.innerHTML = "";
   setsSection.classList.add("hidden");
+  stopRestTimer();
 
   // Load all exercises from the saved workout
   (workoutData.superset_groups || []).forEach((group) => {
@@ -565,6 +627,7 @@ function cancelEdit() {
   noteInput.value = "";
   setsList.innerHTML = "";
   setsSection.classList.add("hidden");
+  stopRestTimer();
   renderWorkout();
   updateEditingUI();
   clearDraft();
@@ -610,6 +673,7 @@ btnSaveWorkout.addEventListener("click", async () => {
     currentExercise = null;
     editingWorkoutId = null;
     noteInput.value = "";
+    stopRestTimer();
     renderWorkout();
     updateEditingUI();
     clearDraft();
