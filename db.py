@@ -67,6 +67,19 @@ def init_db():
                 text        TEXT    NOT NULL,
                 created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS events (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER,
+                kind        TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                data        TEXT                 -- optional JSON payload
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_events_user_created
+                ON events(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_events_kind_created
+                ON events(kind, created_at);
         """)
 
         # Migrations
@@ -310,6 +323,54 @@ def export_workouts(user_id: int) -> list[dict]:
         """, (user_id,)).fetchall()
 
         return [dict(r) for r in rows]
+
+
+def log_event(user_id: int | None, kind: str, data: dict | None = None) -> int:
+    """Record a user event for audit / telemetry. Failures are swallowed so
+    logging never breaks a caller."""
+    try:
+        with get_db() as conn:
+            cur = conn.execute(
+                "INSERT INTO events (user_id, kind, data) VALUES (?, ?, ?)",
+                (user_id, kind, json.dumps(data) if data else None),
+            )
+            return cur.lastrowid
+    except Exception:
+        return -1
+
+
+def get_events(
+    user_id: int | None = None,
+    kind: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Fetch events, newest first. Filter by user_id and/or kind if given."""
+    where = []
+    params: list = []
+    if user_id is not None:
+        where.append("user_id = ?")
+        params.append(user_id)
+    if kind is not None:
+        where.append("kind = ?")
+        params.append(kind)
+    sql = "SELECT id, user_id, kind, created_at, data FROM events"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
+    params.append(limit)
+
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            if d.get("data"):
+                try:
+                    d["data"] = json.loads(d["data"])
+                except json.JSONDecodeError:
+                    pass
+            out.append(d)
+        return out
 
 
 def save_feedback(user_id: int, text: str) -> int:

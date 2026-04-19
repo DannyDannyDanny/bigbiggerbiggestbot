@@ -16,7 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, save_feedback, get_user_workout_number, resolve_user_number
+from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, save_feedback, get_user_workout_number, resolve_user_number, log_event
 from parser import parse_workout, format_workout
 
 load_dotenv()
@@ -78,6 +78,7 @@ def extract_timestamp(update: Update) -> tuple[datetime, bool]:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_event(update.effective_user.id, "cmd.start")
     text = (
         "\U0001f4aa <b>Fitness Tracker Bot</b>\n\n"
         "Send me your workout and I'll save it!\n\n"
@@ -112,6 +113,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    log_event(user_id, "cmd.history")
     workouts = get_workouts(user_id, limit=5)
 
     if not workouts:
@@ -134,6 +136,7 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    log_event(user_id, "cmd.stats")
     stats = get_stats_sql(user_id)
 
     if stats["total_workouts"] == 0:
@@ -152,6 +155,7 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    log_event(user_id, "cmd.delete", {"args": context.args or []})
 
     if not context.args:
         await update.message.reply_text(
@@ -169,6 +173,7 @@ async def cmd_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     workout_id = resolve_user_number(user_id, user_number)
     if workout_id is not None and delete_workout(user_id, workout_id):
+        log_event(user_id, "workout.delete", {"workout_id": workout_id, "user_number": user_number})
         await update.message.reply_text(f"\U0001f5d1 Workout #{user_number} deleted.")
     else:
         await update.message.reply_text(
@@ -183,6 +188,7 @@ async def cmd_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from db import export_workouts
 
     user_id = update.effective_user.id
+    log_event(user_id, "cmd.export")
     data = export_workouts(user_id)
 
     if not data:
@@ -211,6 +217,7 @@ async def cmd_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     save_feedback(user_id, text)
+    log_event(user_id, "cmd.feedback")
     await update.message.reply_text("\U0001f4dd Feedback saved, thanks!")
 
 
@@ -249,6 +256,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     superset_dicts = [[ex.to_dict() for ex in group] for group in groups]
     workout_id = save_workout(user_id, timestamp, superset_dicts, raw_text=text)
     user_number = get_user_workout_number(user_id, workout_id) or workout_id
+    log_event(user_id, "workout.save", {
+        "source": "text",
+        "workout_id": workout_id,
+        "user_number": user_number,
+        "forwarded": is_forwarded,
+    })
 
     # Count totals for the confirmation
     total_exercises = sum(len(g) for g in groups)

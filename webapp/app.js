@@ -29,6 +29,24 @@ async function api(method, path, body = null) {
   return res.json();
 }
 
+// ── Event logging (fire-and-forget) ─────────────────────────────
+function logEvent(kind, data) {
+  if (!userId) return;
+  try {
+    fetch(API + "/events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": tg.initData,
+      },
+      body: JSON.stringify({ kind, data: data || null }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {
+    // Never let logging break anything
+  }
+}
+
 // ── Toast ───────────────────────────────────────────────────────
 function showToast(msg) {
   let toast = document.querySelector(".toast");
@@ -329,6 +347,12 @@ function addSet() {
 
   addSetToDOM(reps, weight);
   syncEditorUI();
+
+  logEvent("set.add", {
+    exercise: currentExercise?.name || null,
+    reps,
+    weight_kg: weight,
+  });
 
   repsInput.value = "";
   weightInput.value = weight ? String(weight) : "";
@@ -784,6 +808,7 @@ async function loadVersion() {
 async function init() {
   loadVersion();
   if (!userId) return;
+  logEvent("miniapp.open");
   try {
     const data = await api("GET", "/exercises");
     knownExercises = data.exercises || [];

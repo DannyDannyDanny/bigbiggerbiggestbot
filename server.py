@@ -17,7 +17,7 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 
-from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number, get_all_exercise_names
+from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number, get_all_exercise_names, log_event
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -228,6 +228,11 @@ async def api_save_workout(request: web.Request):
         )
 
     user_number = get_user_workout_number(request["user_id"], workout_id)
+    log_event(request["user_id"], "workout.save", {
+        "source": "webapp",
+        "workout_id": workout_id,
+        "user_number": user_number,
+    })
     return web.json_response(
         {"workout_id": workout_id, "user_number": user_number},
         status=201,
@@ -249,6 +254,11 @@ async def api_update_workout(request: web.Request):
     if new_id is None:
         return web.json_response({"error": "Not found"}, status=404)
     user_number = get_user_workout_number(request["user_id"], new_id)
+    log_event(request["user_id"], "workout.update", {
+        "old_workout_id": workout_id,
+        "workout_id": new_id,
+        "user_number": user_number,
+    })
     return web.json_response({"workout_id": new_id, "user_number": user_number})
 
 
@@ -257,6 +267,10 @@ async def api_delete_workout(request: web.Request):
     """Soft-delete a workout by ID."""
     workout_id = int(request.match_info["workout_id"])
     if delete_workout(request["user_id"], workout_id):
+        log_event(request["user_id"], "workout.delete", {
+            "source": "webapp",
+            "workout_id": workout_id,
+        })
         return web.json_response({"deleted": True})
     return web.json_response({"error": "Not found"}, status=404)
 
@@ -286,6 +300,21 @@ async def api_export_json(request: web.Request):
 async def api_version(request: web.Request):
     """Return the running server version. Unauthenticated."""
     return web.json_response({"version": _VERSION})
+
+
+@require_auth
+async def api_log_event(request: web.Request):
+    """Record a client-emitted event (Mini App telemetry)."""
+    try:
+        body = await request.json()
+    except (ValueError, json.JSONDecodeError):
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    kind = body.get("kind")
+    if not isinstance(kind, str) or not kind:
+        return web.json_response({"error": "Missing kind"}, status=400)
+    data = body.get("data") if isinstance(body.get("data"), dict) else None
+    log_event(request["user_id"], kind, data)
+    return web.Response(status=204)
 
 
 @require_auth
@@ -322,6 +351,7 @@ def create_app() -> web.Application:
     app.router.add_get("/api/export/json", api_export_json)
     app.router.add_get("/api/export/csv", api_export_csv)
     app.router.add_get("/api/version", api_version)
+    app.router.add_post("/api/events", api_log_event)
 
     # Serve the webapp/ folder
     webapp_dir = pathlib.Path(__file__).parent / "webapp"

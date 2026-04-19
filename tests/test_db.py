@@ -253,6 +253,62 @@ class TestAllExerciseNames:
         assert db.get_all_exercise_names() == ["Apple", "Mango", "Zebra"]
 
 
+# ── events / log_event ───────────────────────────────────────────
+
+
+class TestEvents:
+    def test_log_and_fetch(self, tmp_db):
+        db.log_event(1, "cmd.start")
+        events = db.get_events()
+        assert len(events) == 1
+        assert events[0]["user_id"] == 1
+        assert events[0]["kind"] == "cmd.start"
+        assert events[0]["data"] is None
+
+    def test_log_with_data(self, tmp_db):
+        db.log_event(1, "set.add", {"exercise": "Bench", "reps": 8, "weight_kg": 35.0})
+        events = db.get_events()
+        assert events[0]["data"] == {"exercise": "Bench", "reps": 8, "weight_kg": 35.0}
+
+    def test_filter_by_user(self, tmp_db):
+        db.log_event(1, "cmd.start")
+        db.log_event(2, "cmd.start")
+        db.log_event(1, "cmd.history")
+        assert {e["kind"] for e in db.get_events(user_id=1)} == {"cmd.start", "cmd.history"}
+        assert {e["kind"] for e in db.get_events(user_id=2)} == {"cmd.start"}
+
+    def test_filter_by_kind(self, tmp_db):
+        db.log_event(1, "cmd.start")
+        db.log_event(1, "set.add", {"reps": 5})
+        db.log_event(2, "set.add", {"reps": 3})
+        sets = db.get_events(kind="set.add")
+        assert len(sets) == 2
+        assert all(e["kind"] == "set.add" for e in sets)
+
+    def test_newest_first(self, tmp_db):
+        db.log_event(1, "first")
+        db.log_event(1, "second")
+        db.log_event(1, "third")
+        kinds = [e["kind"] for e in db.get_events()]
+        assert kinds == ["third", "second", "first"]
+
+    def test_limit(self, tmp_db):
+        for i in range(5):
+            db.log_event(1, f"k{i}")
+        assert len(db.get_events(limit=2)) == 2
+
+    def test_null_user_allowed(self, tmp_db):
+        db.log_event(None, "system.tick")
+        events = db.get_events()
+        assert events[0]["user_id"] is None
+
+    def test_log_failure_returns_minus_one(self, tmp_db):
+        # Simulate failure by passing unserializable data
+        class X: pass
+        result = db.log_event(1, "bad", {"obj": X()})
+        assert result == -1
+
+
 # ── update_workout ───────────────────────────────────────────────
 
 
