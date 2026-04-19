@@ -26,6 +26,7 @@
 - [x] Rest timer — shows mm:ss since the last set in the current exercise. Client-side state; resets per exercise; survives draft restore. Settings-toggle gate TBD when profile/settings lands.
 - [ ] Cardio tracking — separate data model (duration, distance, pace) alongside strength workouts
 - [ ] About section — Mini App panel with pre-alpha / use-at-own-risk disclaimer, version, license link.
+- [ ] Editable workout timestamp — let users set/change the workout date when logging or editing, so they can backfill old sessions. Current flow always uses server `now()` (Mini App) or the forwarded-message date (bot).
 
 ## Later later
 - [ ] Per-exercise graphs/trends
