@@ -14,7 +14,7 @@
 - [ ] Exercise name standardization — OHP = shoulder press = military press. Aliases table.
 - [x] Global exercise name suggestions — autocomplete draws from all users' exercises, ordered by popularity, case-insensitively grouped.
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
-- [ ] Interaction / event logging — structured audit of user actions (command usage, Mini App opens, per-set additions with timestamps). Foundation for the rest-timer and future telemetry.
+- [x] Interaction / event logging — structured `events` table; bot commands, workout save/update/delete, Mini App opens, and per-set additions all record events. `POST /api/events` endpoint lets the Mini App emit client-side events. Rest-timer prereq done.
 - [ ] Staging via shipyard — new features and fixes must be verified against the shipyard bot (separate Telegram bot) before merging to `main` and triggering the production deploy.
 
 ## Later
