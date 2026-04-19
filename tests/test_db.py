@@ -211,6 +211,48 @@ class TestUserNumbering:
         assert db.resolve_user_number(user_id=2, user_number=1) is None
 
 
+# ── global exercise names ────────────────────────────────────────
+
+
+class TestAllExerciseNames:
+    def test_empty(self, tmp_db):
+        assert db.get_all_exercise_names() == []
+
+    def test_draws_from_all_users(self, tmp_db):
+        _save_simple(user_id=1, name="Bench")
+        _save_simple(user_id=2, name="Squat")
+        names = db.get_all_exercise_names()
+        assert set(names) == {"Bench", "Squat"}
+
+    def test_ordered_by_popularity(self, tmp_db):
+        # Squat appears 3x (across users); Bench 2x; Rows 1x.
+        for _ in range(3):
+            _save_simple(name="Squat")
+        for _ in range(2):
+            _save_simple(name="Bench")
+        _save_simple(name="Rows")
+        assert db.get_all_exercise_names() == ["Squat", "Bench", "Rows"]
+
+    def test_case_insensitive_grouping(self, tmp_db):
+        _save_simple(name="bench press")
+        _save_simple(name="Bench Press")
+        _save_simple(name="BENCH PRESS")
+        names = db.get_all_exercise_names()
+        assert len(names) == 1  # collapsed into one group
+
+    def test_excludes_deleted_workouts(self, tmp_db):
+        wid = _save_simple(name="Deadlift")
+        _save_simple(name="Squat")
+        db.delete_workout(1, wid)
+        assert db.get_all_exercise_names() == ["Squat"]
+
+    def test_alphabetical_tiebreak(self, tmp_db):
+        # All tied at 1 usage — should come back alphabetical.
+        for n in ["Zebra", "Apple", "Mango"]:
+            _save_simple(name=n)
+        assert db.get_all_exercise_names() == ["Apple", "Mango", "Zebra"]
+
+
 # ── update_workout ───────────────────────────────────────────────
 
 

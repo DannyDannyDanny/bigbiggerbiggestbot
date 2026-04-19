@@ -17,7 +17,7 @@ from urllib.parse import parse_qs
 
 from aiohttp import web
 
-from db import init_db, get_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number
+from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number, get_all_exercise_names
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -263,18 +263,10 @@ async def api_delete_workout(request: web.Request):
 
 @require_auth
 async def api_get_exercise_names(request: web.Request):
-    """Return unique exercise names this user has logged (for autocomplete)."""
-    with get_db() as conn:
-        rows = conn.execute(
-            """SELECT DISTINCT e.name
-               FROM exercises e
-               JOIN superset_groups sg ON sg.id = e.superset_group_id
-               JOIN workouts w ON w.id = sg.workout_id
-               WHERE w.user_id = ?
-               ORDER BY e.name""",
-            (request["user_id"],),
-        ).fetchall()
-    return web.json_response({"exercises": [r["name"] for r in rows]})
+    """Return exercise names (for autocomplete), aggregated globally across
+    all users and ordered by popularity.
+    """
+    return web.json_response({"exercises": get_all_exercise_names()})
 
 
 @require_auth

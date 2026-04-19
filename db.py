@@ -252,6 +252,24 @@ def get_workout_count(user_id: int) -> int:
         return row["cnt"]
 
 
+def get_all_exercise_names() -> list[str]:
+    """Return exercise names across all users (for autocomplete), ordered by
+    popularity (most-used first), then alphabetically. Case-insensitive
+    grouping — each distinct name is returned once in its most-used casing.
+    """
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT e.name, COUNT(*) AS n
+               FROM exercises e
+               JOIN superset_groups sg ON sg.id = e.superset_group_id
+               JOIN workouts w ON w.id = sg.workout_id
+               WHERE w.deleted_at IS NULL
+               GROUP BY LOWER(e.name)
+               ORDER BY n DESC, LOWER(e.name) ASC""",
+        ).fetchall()
+        return [r["name"] for r in rows]
+
+
 def get_stats_sql(user_id: int) -> dict:
     """Compute stats entirely in SQL."""
     with get_db() as conn:
