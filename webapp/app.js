@@ -268,6 +268,7 @@ const setsLabel = document.getElementById("sets-label");
 const setsList = document.getElementById("sets-list");
 const repsInput = document.getElementById("inp-reps");
 const weightInput = document.getElementById("inp-weight");
+const btnWeightSign = document.getElementById("btn-weight-sign");
 const btnAddSet = document.getElementById("btn-add-set");
 const btnSaveWorkout = document.getElementById("btn-save-workout");
 const workoutExercises = document.getElementById("workout-exercises");
@@ -351,6 +352,7 @@ function startExercise(name) {
   nameInput.value = "";
   repsInput.value = "";
   weightInput.value = "";
+  syncWeightSignUI();
   repsInput.focus();
   notesSection.classList.remove("hidden");
   stopRestTimer();
@@ -420,12 +422,37 @@ function addSet() {
 
   repsInput.value = "";
   weightInput.value = weight ? String(weight) : "";
+  syncWeightSignUI();
   repsInput.focus();
   tg.HapticFeedback.impactOccurred("light");
   saveDraft();
 }
 
 btnAddSet.addEventListener("click", addSet);
+
+function syncWeightSignUI() {
+  const v = weightInput.value.trim();
+  const negative = v.startsWith("-");
+  btnWeightSign.classList.toggle("active", negative);
+}
+
+btnWeightSign.addEventListener("click", () => {
+  // Flip the sign of the current weight value. If empty, start with "-"
+  // so the user can type digits after it (iOS numeric keypad has no minus).
+  const v = weightInput.value.trim();
+  if (v === "" || v === "-") {
+    weightInput.value = v === "-" ? "" : "-";
+  } else if (v.startsWith("-")) {
+    weightInput.value = v.slice(1);
+  } else {
+    weightInput.value = "-" + v;
+  }
+  syncWeightSignUI();
+  weightInput.focus();
+  tg.HapticFeedback.selectionChanged();
+});
+
+weightInput.addEventListener("input", syncWeightSignUI);
 
 repsInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -561,6 +588,7 @@ function editExercise(idx) {
   // Pre-fill weight input with last set's weight for convenience
   const lastWeight = ex.sets_detail?.length ? ex.sets_detail[ex.sets_detail.length - 1].weight_kg : 0;
   weightInput.value = lastWeight ? String(lastWeight) : "";
+  syncWeightSignUI();
   repsInput.value = "";
   repsInput.focus();
 
