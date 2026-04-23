@@ -16,7 +16,7 @@
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
 - [x] Interaction / event logging — structured `events` table; bot commands, workout save/update/delete, Mini App opens, and per-set additions all record events. `POST /api/events` endpoint lets the Mini App emit client-side events. Rest-timer prereq done.
 - [ ] Staging via shipyard — new features and fixes must be verified against the shipyard bot (separate Telegram bot) before merging to `main` and triggering the production deploy.
-- [ ] **feedback #9** Negative weight input — iOS numeric keypad has no minus key, so users can't log assisted bodyweight exercises (e.g. `-20 kg` assisted pull-ups). Add a `±` sign-flip button next to the weight input.
+- [x] **feedback #9** Negative weight input — `±` sign-flip button next to the weight input handles iOS numeric keypads that have no minus key; active state indicates a negative value.
 
 ## Later
 - [ ] **#8** Workout templates — save/load favorite workouts
