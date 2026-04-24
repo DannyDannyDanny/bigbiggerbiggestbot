@@ -203,7 +203,7 @@ let currentExercise = null;
 let editingWorkoutId = null; // non-null when editing a saved workout
 let lastSetAt = null;        // ms-epoch of most recent addSet, or null
 let restTimerInterval = null;
-let settings = { rest_timer: true };
+let settings = { rest_timer: true, weight_sign_button: true };
 
 function settingEnabled(key, def = true) {
   const v = settings[key];
@@ -922,7 +922,7 @@ async function loadSettings() {
   if (!userId) return;
   try {
     const data = await api("GET", "/settings");
-    settings = { rest_timer: true, ...(data.settings || {}) };
+    settings = { rest_timer: true, weight_sign_button: true, ...(data.settings || {}) };
     applySettingsToUI();
     updateRestTimer();
   } catch (e) {
@@ -930,15 +930,24 @@ async function loadSettings() {
   }
 }
 
+function applyWeightSignVisibility() {
+  if (!btnWeightSign) return;
+  btnWeightSign.classList.toggle("hidden", !settingEnabled("weight_sign_button"));
+}
+
 function applySettingsToUI() {
   const restToggle = document.getElementById("setting-rest-timer");
   if (restToggle) restToggle.checked = settingEnabled("rest_timer");
+  const signToggle = document.getElementById("setting-weight-sign");
+  if (signToggle) signToggle.checked = settingEnabled("weight_sign_button");
+  applyWeightSignVisibility();
 }
 
 async function saveSetting(key, value) {
   // Optimistic: update locally first, then sync.
   settings[key] = value;
   updateRestTimer();
+  applyWeightSignVisibility();
   try {
     await api("PUT", "/settings", { [key]: value });
   } catch (e) {
@@ -949,6 +958,10 @@ async function saveSetting(key, value) {
 
 document.getElementById("setting-rest-timer")?.addEventListener("change", (e) => {
   saveSetting("rest_timer", e.target.checked);
+});
+
+document.getElementById("setting-weight-sign")?.addEventListener("change", (e) => {
+  saveSetting("weight_sign_button", e.target.checked);
 });
 
 // ── Version badge ───────────────────────────────────────────────
