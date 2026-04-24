@@ -22,6 +22,7 @@
 - [ ] **#8** Workout templates — save/load favorite workouts
 - [ ] Per-exercise history — "show me all my squat sessions"
 - [ ] Mini-app UI polish (loading states, skeleton screens)
+- [ ] Super subtle animations — tasteful micro-transitions (set-row entry/exit, card flips, tab switches). Nothing flashy; just enough to make state changes feel continuous.
 - [ ] News section — surface new features/fixes on release. Delivery TBD: Mini App panel, occasional bot broadcast, or both.
 - [~] Profile / settings — infrastructure shipped (JSON-blob `user_settings` table, `GET`/`PUT /api/settings`, new Settings tab). First preference wired: rest timer on/off. Units and language still TBD (each needs end-to-end display/input work).
 - [x] Rest timer — shows mm:ss since the last set in the current exercise. Client-side state; resets per exercise; survives draft restore. Settings-toggle gate TBD when profile/settings lands.
