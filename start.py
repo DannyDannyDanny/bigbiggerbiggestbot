@@ -156,9 +156,17 @@ def main():
         print("  Server failed to start!")
         sys.exit(1)
 
-    # 3. Start tunnel
-    tunnel, webapp_url = start_tunnel(port)
-    procs.append(tunnel)
+    # 3. Tunnel — skipped if WEBAPP_URL is already provided (e.g. the bot
+    # is fronted by an external reverse proxy that terminates TLS and
+    # proxies back to localhost:$API_PORT over a private network).
+    env_webapp_url = os.environ.get("WEBAPP_URL", "").strip()
+    tunnel = None
+    if env_webapp_url:
+        webapp_url = env_webapp_url
+        print(f"  WEBAPP_URL from environment: {webapp_url} (skipping cloudflared)")
+    else:
+        tunnel, webapp_url = start_tunnel(port)
+        procs.append(tunnel)
 
     # 4. Start bot
     print(f"\n  WEBAPP_URL: {webapp_url}")
@@ -178,7 +186,10 @@ def main():
         for p in procs:
             ret = p.poll()
             if ret is not None:
-                name = {id(server): "Server", id(tunnel): "Tunnel", id(bot): "Bot"}.get(id(p), "?")
+                proc_names = {id(server): "Server", id(bot): "Bot"}
+                if tunnel is not None:
+                    proc_names[id(tunnel)] = "Tunnel"
+                name = proc_names.get(id(p), "?")
                 print(f"\n  {name} exited with code {ret}")
                 cleanup()
         time.sleep(1)
