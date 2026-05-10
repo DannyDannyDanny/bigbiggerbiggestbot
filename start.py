@@ -20,6 +20,10 @@ import threading
 import time
 import pathlib
 
+# Flush prints line-by-line so the tunnel URL etc. show up promptly in
+# systemd journals (stdout is block-buffered when not connected to a TTY).
+sys.stdout.reconfigure(line_buffering=True)
+
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 SECRETS_FILE = pathlib.Path.home() / ".secrets" / "bigbiggerbiggestbot"
 
