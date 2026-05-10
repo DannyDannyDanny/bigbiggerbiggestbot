@@ -15,7 +15,7 @@
 - [x] Global exercise name suggestions — autocomplete draws from all users' exercises, ordered by popularity, case-insensitively grouped.
 - [ ] **#3** Machine-to-muscle mapping — reference dataset + `/machine <id>` command. Seeded with gym80 IDs.
 - [x] Interaction / event logging — structured `events` table; bot commands, workout save/update/delete, Mini App opens, and per-set additions all record events. `POST /api/events` endpoint lets the Mini App emit client-side events. Rest-timer prereq done.
-- [ ] Staging via shipyard — new features and fixes must be verified against the shipyard bot (separate Telegram bot) before merging to `main` and triggering the production deploy.
+- [x] Staging via shipyard — second NixOS-managed systemd instance on sunken-ship (`fitness-bot-shipyard.service`) watches `origin/staging` from `/home/danny/tg_fitness_bot_shipyard`, runs on port 8081, ephemeral cloudflared tunnel, separate token via `EnvironmentFile`. Workflow: `git push origin <branch>:staging` (auto-deploys ~15 min) → test → `git push origin <branch>:main`. **Activation requires** creating a separate BotFather bot and writing its token to `/home/danny/.secrets/bigbiggerbiggestbot-shipyard.env`.
 - [x] **feedback #9** Negative weight input — `±` sign-flip button next to the weight input handles iOS numeric keypads that have no minus key; active state indicates a negative value.
 
 ## Later
