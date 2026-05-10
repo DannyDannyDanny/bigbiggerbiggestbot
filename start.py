@@ -21,15 +21,25 @@ SECRETS_FILE = pathlib.Path.home() / ".secrets" / "bigbiggerbiggestbot"
 
 
 def load_token() -> str:
-    """Load bot token: secrets file → .env → BOT_TOKEN env var."""
-    # 1. Secrets file (same path as bot.py uses)
+    """Load bot token: BOT_TOKEN env → secrets file → .env in cwd.
+
+    Env var wins so multiple instances on the same host (prod + shipyard)
+    can each get a distinct token via systemd EnvironmentFile.
+    """
+    # 1. Already in environment (systemd EnvironmentFile sets this for staging)
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if token:
+        print("  Token loaded from BOT_TOKEN env var")
+        return token
+
+    # 2. Secrets file (same path as bot.py uses)
     if SECRETS_FILE.is_file():
         token = SECRETS_FILE.read_text().strip()
         if token:
             print(f"  Token loaded from {SECRETS_FILE}")
             return token
 
-    # 2. .env in working directory
+    # 3. .env in working directory
     env_file = pathlib.Path.cwd() / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():
@@ -40,15 +50,8 @@ def load_token() -> str:
                     print(f"  Token loaded from {env_file}")
                     return token
 
-    # 3. Already in environment
-    token = os.environ.get("BOT_TOKEN", "").strip()
-    if token:
-        print("  Token loaded from BOT_TOKEN env var")
-        return token
-
     print("\n  No bot token found!")
-    print(f"  Put it in {SECRETS_FILE}")
-    print("  Or create a .env file with: BOT_TOKEN=your-token\n")
+    print(f"  Set BOT_TOKEN env var, or put it in {SECRETS_FILE}, or in a .env file.\n")
     sys.exit(1)
 
 

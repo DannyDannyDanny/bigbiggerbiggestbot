@@ -60,11 +60,27 @@ nix develop --command pytest tests/ -v
 
 ## Deployment
 
-Runs as a systemd service. A timer pulls this repo periodically and
-restarts the service when the remote has new commits — push to `main`
-and the bot redeploys itself within ~15 minutes.
+Two environments share one host (`sunken-ship`):
 
-The SQLite database lives next to the code at `workouts.db` (gitignored).
+- **Production** — `fitness-bot.service`, working dir `/home/danny/tg_fitness_bot`,
+  watches `origin/main`, served behind a stable URL via the VPS Caddy.
+- **Shipyard staging** — `fitness-bot-shipyard.service`, working dir
+  `/home/danny/tg_fitness_bot_shipyard`, watches `origin/staging`, separate
+  bot token, ephemeral cloudflared URL each restart.
+
+Each has its own pull timer that fetches every ~15 minutes and restarts
+the service when its branch has new commits.
+
+**Workflow:**
+
+```
+# 1. land changes on a working branch (or main locally)
+git push origin <branch>:staging   # → shipyard auto-deploys, test there
+git push origin <branch>:main      # → production auto-deploys
+```
+
+Each environment keeps its own `workouts.db` next to its code (gitignored),
+so testing on shipyard never touches production data.
 
 ## Architecture
 

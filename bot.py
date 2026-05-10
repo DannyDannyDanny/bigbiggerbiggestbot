@@ -27,22 +27,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Token resolution: secrets file → .env / environment variable
+# Token resolution: BOT_TOKEN env var → secrets file
+# Env var wins so multiple instances on the same host (e.g. prod + shipyard
+# staging) can each point to a different token without sharing a secrets file.
 SECRETS_FILE = os.path.expanduser("~/.secrets/bigbiggerbiggestbot")
 
 
 def _load_token() -> str:
-    # 1. Try the secrets file
+    # 1. Env var (set by systemd EnvironmentFile in multi-instance setups)
+    token = os.environ.get("BOT_TOKEN", "").strip()
+    if token:
+        return token
+    # 2. Default secrets file
     if os.path.isfile(SECRETS_FILE):
         token = open(SECRETS_FILE).read().strip()
         if token:
             return token
-    # 2. Fall back to env var (set via .env or shell)
-    token = os.environ.get("BOT_TOKEN", "").strip()
-    if token:
-        return token
     raise RuntimeError(
-        f"No bot token found. Put it in {SECRETS_FILE} or set BOT_TOKEN env var."
+        f"No bot token found. Set BOT_TOKEN env var or put it in {SECRETS_FILE}."
     )
 
 
