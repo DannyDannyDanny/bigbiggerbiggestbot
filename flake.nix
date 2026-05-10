@@ -14,7 +14,8 @@
         python = pkgs.python3;
 
         pythonEnv = python.withPackages (ps: with ps; [
-          python-telegram-bot
+          # python-telegram-bot was used by the now-deleted bot.py polling
+          # loop; the Mini App backend doesn't need it. Kept off this list.
           python-dotenv
           aiohttp
           pytest
@@ -27,8 +28,7 @@
           packages = [ pythonEnv pkgs.cloudflared ];
           shellHook = ''
             echo "💪 BigBiggerBiggestBot dev shell"
-            echo "   Run:  python start.py    (server + tunnel + bot)"
-            echo "   Run:  python bot.py       (bot only, no mini app)"
+            echo "   Run:  python start.py    (server + tunnel)"
           '';
         };
 

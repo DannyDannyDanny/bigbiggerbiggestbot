@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
 Orchestrator — single entry point for `nix run`.
-  1. Loads BOT_TOKEN from ~/.secrets or .env (same as bot.py)
-  2. Starts the API server
-  3. Starts localtunnel to get a public HTTPS URL
-  4. Starts the Telegram bot with WEBAPP_URL set
-  5. Cleans up everything on Ctrl+C
+  1. Loads BOT_TOKEN (env var → ~/.secrets → .env)
+  2. Starts the API + Mini App server
+  3. Optionally starts a cloudflared Quick Tunnel for a public HTTPS URL
+     (skipped if WEBAPP_URL is already set, e.g. fronted by a reverse proxy)
+  4. Cleans up on Ctrl+C
+
+The slash-command bot was removed: the Mini App is the only interface.
+The bot's identity (token) only matters now for validating Telegram WebApp
+initData HMACs and for the menu-button URL — both handled in server.py.
 """
 import os
 import re
@@ -23,8 +27,8 @@ SECRETS_FILE = pathlib.Path.home() / ".secrets" / "bigbiggerbiggestbot"
 def load_token() -> str:
     """Load bot token: BOT_TOKEN env → secrets file → .env in cwd.
 
-    Env var wins so multiple instances on the same host (prod + shipyard)
-    can each get a distinct token via systemd EnvironmentFile.
+    Env var wins so multiple instances on the same host (prod + shipyard
+    staging) can each get a distinct token via systemd EnvironmentFile.
     """
     # 1. Already in environment (systemd EnvironmentFile sets this for staging)
     token = os.environ.get("BOT_TOKEN", "").strip()
@@ -32,7 +36,7 @@ def load_token() -> str:
         print("  Token loaded from BOT_TOKEN env var")
         return token
 
-    # 2. Secrets file (same path as bot.py uses)
+    # 2. Default secrets file
     if SECRETS_FILE.is_file():
         token = SECRETS_FILE.read_text().strip()
         if token:
@@ -102,19 +106,11 @@ def start_tunnel(port: int) -> tuple[subprocess.Popen, str]:
     # Keep draining cloudflared output so its pipe buffer doesn't fill up
     # (which would block the process and kill the tunnel)
     def _drain():
-        for line in proc.stdout:
+        for _line in proc.stdout:
             pass
     threading.Thread(target=_drain, daemon=True).start()
 
     return proc, url
-
-
-def start_bot(bot_token: str, webapp_url: str) -> subprocess.Popen:
-    env = {**os.environ, "BOT_TOKEN": bot_token, "WEBAPP_URL": webapp_url}
-    return subprocess.Popen(
-        [sys.executable, str(SCRIPT_DIR / "bot.py")],
-        env=env,
-    )
 
 
 def main():
@@ -140,11 +136,11 @@ def main():
 
     print()
     print("  ==========================================")
-    print("  BigBiggerBiggest — Fitness Tracker")
+    print("  BigBiggerBiggest — Mini App backend")
     print("  ==========================================")
     print()
 
-    # 1. Load token
+    # 1. Load token (used by server.py to validate initData HMACs)
     bot_token = load_token()
     masked = bot_token[:5] + "..." + bot_token[-4:]
     print(f"  BOT_TOKEN: {masked}")
@@ -159,11 +155,10 @@ def main():
         print("  Server failed to start!")
         sys.exit(1)
 
-    # 3. Tunnel — skipped if WEBAPP_URL is already provided (e.g. the bot
-    # is fronted by an external reverse proxy that terminates TLS and
-    # proxies back to localhost:$API_PORT over a private network).
+    # 3. Tunnel — skipped if WEBAPP_URL is already provided (e.g. fronted
+    # by an external reverse proxy that terminates TLS and proxies back to
+    # localhost:$API_PORT over a private network).
     env_webapp_url = os.environ.get("WEBAPP_URL", "").strip()
-    tunnel = None
     if env_webapp_url:
         webapp_url = env_webapp_url
         print(f"  WEBAPP_URL from environment: {webapp_url} (skipping cloudflared)")
@@ -171,27 +166,21 @@ def main():
         tunnel, webapp_url = start_tunnel(port)
         procs.append(tunnel)
 
-    # 4. Start bot
-    print(f"\n  WEBAPP_URL: {webapp_url}")
-    print("  Starting bot...\n")
-    bot = start_bot(bot_token, webapp_url)
-    procs.append(bot)
-
-    print("  ==========================================")
-    print(f"  All systems go!")
+    print("\n  ==========================================")
+    print("  All systems go!")
     print(f"  Mini App: {webapp_url}")
     print(f"  API:      http://localhost:{port}")
-    print(f"  Press Ctrl+C to stop")
-    print("  ==========================================")
-    print()
+    print("  Press Ctrl+C to stop")
+    print("  ==========================================\n")
+
+    proc_names = {id(server): "Server"}
+    if procs[-1] is not server:
+        proc_names[id(procs[-1])] = "Tunnel"
 
     while True:
         for p in procs:
             ret = p.poll()
             if ret is not None:
-                proc_names = {id(server): "Server", id(bot): "Bot"}
-                if tunnel is not None:
-                    proc_names[id(tunnel)] = "Tunnel"
                 name = proc_names.get(id(p), "?")
                 print(f"\n  {name} exited with code {ret}")
                 cleanup()
