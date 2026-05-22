@@ -253,6 +253,48 @@ class TestAllExerciseNames:
         assert db.get_all_exercise_names() == ["Apple", "Mango", "Zebra"]
 
 
+# ── get_last_exercise ────────────────────────────────────────────
+
+
+class TestGetLastExercise:
+    def test_none_when_no_history(self, tmp_db):
+        assert db.get_last_exercise(1, "Bench") is None
+
+    def test_returns_most_recent(self, tmp_db):
+        t = lambda d: datetime(2024, 1, d, tzinfo=timezone.utc)
+        db.save_workout(1, t(1), [[_make_exercise(name="Squat", weight=80.0)]])
+        db.save_workout(1, t(5), [[_make_exercise(name="Squat", weight=90.0)]])
+        last = db.get_last_exercise(1, "Squat")
+        assert last is not None
+        assert last["weight_kg"] == 90.0
+        assert last["timestamp"].startswith("2024-01-05")
+
+    def test_case_insensitive(self, tmp_db):
+        _save_simple(name="Bench Press")
+        assert db.get_last_exercise(1, "bench press") is not None
+        assert db.get_last_exercise(1, "BENCH PRESS") is not None
+
+    def test_sets_detail_parsed(self, tmp_db):
+        detail = [{"reps": 8, "weight_kg": 25.0}, {"reps": 5, "weight_kg": 35.0}]
+        ex = {
+            "name": "Press", "machine_id": None,
+            "sets": 2, "reps": 8, "weight_kg": 25.0,
+            "sets_detail": detail, "raw_line": "Press: 8x25, 5x35",
+        }
+        db.save_workout(1, datetime.now(timezone.utc), [[ex]])
+        last = db.get_last_exercise(1, "Press")
+        assert last["sets_detail"] == detail
+
+    def test_scoped_to_user(self, tmp_db):
+        _save_simple(user_id=1, name="Deadlift")
+        assert db.get_last_exercise(2, "Deadlift") is None
+
+    def test_ignores_deleted(self, tmp_db):
+        wid = _save_simple(name="Rows")
+        db.delete_workout(1, wid)
+        assert db.get_last_exercise(1, "Rows") is None
+
+
 # ── events / log_event ───────────────────────────────────────────
 
 

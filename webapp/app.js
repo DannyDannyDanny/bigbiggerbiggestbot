@@ -125,6 +125,7 @@ function restoreDraft() {
       if (Array.isArray(draft.currentSets)) {
         draft.currentSets.forEach((s) => addSetToDOM(s.reps, s.weight_kg));
       }
+      loadLastSession(currentExercise.name);
     }
 
     // Restore active tab
@@ -357,8 +358,70 @@ function startExercise(name) {
   notesSection.classList.remove("hidden");
   stopRestTimer();
   syncEditorUI();
+  loadLastSession(name);
   tg.HapticFeedback.selectionChanged();
   saveDraft();
+}
+
+// ── Last-session recall ─────────────────────────────────────────
+function _relativeDay(iso) {
+  const then = new Date(iso);
+  if (isNaN(then.getTime())) return "";
+  const days = Math.floor((Date.now() - then.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return days + " days ago";
+  if (days < 14) return "1 week ago";
+  if (days < 30) return Math.floor(days / 7) + " weeks ago";
+  return then.toLocaleDateString();
+}
+
+function _setsSummary(last) {
+  const detail = last.sets_detail || [];
+  const varied = detail.length > 0 && !detail.every(
+    (d) => d.reps === detail[0].reps && d.weight_kg === detail[0].weight_kg
+  );
+  if (varied) {
+    return detail
+      .map((d) => (d.weight_kg ? `${d.reps}×${fmtWeight(d.weight_kg)}kg` : `${d.reps}`))
+      .join(", ");
+  }
+  return last.weight_kg
+    ? `${last.sets}×${last.reps}×${fmtWeight(last.weight_kg)}kg`
+    : `${last.sets}×${last.reps}`;
+}
+
+async function loadLastSession(name) {
+  const hint = document.getElementById("last-session-hint");
+  if (hint) {
+    hint.classList.add("hidden");
+    hint.textContent = "";
+  }
+  try {
+    const data = await api("GET", "/exercises/last?name=" + encodeURIComponent(name));
+    const last = data.last;
+    // Bail if the user has moved on to a different exercise meanwhile.
+    if (!last || !currentExercise || currentExercise.name !== name) return;
+
+    if (hint) {
+      const when = _relativeDay(last.timestamp);
+      hint.textContent = "Last time: " + _setsSummary(last) + (when ? " · " + when : "");
+      hint.classList.remove("hidden");
+    }
+
+    // Pre-fill the weight input with the last set's weight, but only if the
+    // user hasn't already started typing or logged a set.
+    const detail = last.sets_detail || [];
+    const lastWeight = detail.length
+      ? detail[detail.length - 1].weight_kg
+      : last.weight_kg;
+    if (lastWeight && !weightInput.value.trim() && getCurrentSets().length === 0) {
+      weightInput.value = String(lastWeight);
+      syncWeightSignUI();
+    }
+  } catch (e) {
+    // Silent — recall is a convenience, never block exercise entry.
+  }
 }
 
 function getCurrentSets() {
@@ -591,6 +654,14 @@ function editExercise(idx) {
   syncWeightSignUI();
   repsInput.value = "";
   repsInput.focus();
+
+  // The set rows in front of you are the reference here — drop any stale
+  // "last time" hint from an earlier startExercise.
+  const hint = document.getElementById("last-session-hint");
+  if (hint) {
+    hint.classList.add("hidden");
+    hint.textContent = "";
+  }
 
   stopRestTimer();
   renderWorkout();

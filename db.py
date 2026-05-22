@@ -263,6 +263,39 @@ def resolve_user_number(user_id: int, user_number: int) -> int | None:
         return row["id"] if row else None
 
 
+def get_last_exercise(user_id: int, name: str) -> dict | None:
+    """Return the most recent logged entry for an exercise (case-insensitive
+    name match) from this user's non-deleted workouts, or None.
+
+    The returned dict carries the exercise fields plus the parent workout's
+    `timestamp`, and `sets_detail` parsed back into a list.
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT e.name, e.machine_id, e.sets, e.reps, e.weight_kg,
+                      e.sets_detail, w.timestamp
+               FROM workouts w
+               JOIN superset_groups sg ON sg.workout_id = w.id
+               JOIN exercises e ON e.superset_group_id = sg.id
+               WHERE w.user_id = ? AND w.deleted_at IS NULL
+                 AND LOWER(e.name) = LOWER(?)
+               ORDER BY w.timestamp DESC, e.id DESC
+               LIMIT 1""",
+            (user_id, name),
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    if d.get("sets_detail"):
+        try:
+            d["sets_detail"] = json.loads(d["sets_detail"])
+        except json.JSONDecodeError:
+            d["sets_detail"] = []
+    else:
+        d["sets_detail"] = []
+    return d
+
+
 def get_workout_count(user_id: int) -> int:
     with get_db() as conn:
         row = conn.execute(

@@ -241,6 +241,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.last-session-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #999);
+  background: var(--tg-theme-bg-color, #fff);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
 .btn-danger {
   color: #e53935 !important;
   font-size: 12px !important;
