@@ -17,6 +17,7 @@
 - [x] Interaction / event logging — structured `events` table; bot commands, workout save/update/delete, Mini App opens, and per-set additions all record events. `POST /api/events` endpoint lets the Mini App emit client-side events. Rest-timer prereq done.
 - [x] Staging via shipyard — Mini-App-only HTTP tenant under `shipyard_poc_bot` (slash-command bot deleted; phantom-ship's Shipyard owns Telegram polling). `fitness-bot-shipyard.service` on sunken-ship watches `origin/staging` from `/home/danny/tg_fitness_bot_shipyard`, listens on `:8081`, fronted by vps-relay Caddy at **https://b3.dannydannydanny.me**, validates initData against `shipyard_poc_bot`'s token (`EnvironmentFile=/home/danny/.secrets/shipyard_poc_bot.env`). Listed in `~/python-projects/26_shipyard/apps.json` as `b3bot-beta`. Workflow: `git push origin <branch>:staging` (auto-deploys ~15 min) → tap **B3Bot beta** in shipyard_poc_bot → test → `git push origin <branch>:main`.
 - [x] **feedback #9** Negative weight input — `±` sign-flip button next to the weight input handles iOS numeric keypads that have no minus key; active state indicates a negative value.
+- [ ] Last-session recall — when starting an exercise, show the most recent sets/weights logged for it (and pre-fill the weight) so you have a reference for what to beat.
 
 ## Later
 - [ ] **#8** Workout templates — save/load favorite workouts
