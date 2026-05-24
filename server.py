@@ -18,6 +18,7 @@ from urllib.parse import parse_qs
 from aiohttp import web
 
 from db import init_db, save_workout, get_workouts, get_workout_count, get_stats_sql, delete_workout, update_workout, export_workouts, get_user_workout_number, get_all_exercise_names, log_event, get_settings, update_settings, get_last_exercise
+import exercise_db
 from parser import parse_workout, format_workout
 
 logging.basicConfig(
@@ -294,6 +295,15 @@ async def api_get_last_exercise(request: web.Request):
 
 
 @require_auth
+async def api_lookup_exercise(request: web.Request):
+    """Look up an exercise in the static Free-Exercise-DB reference data."""
+    name = request.query.get("name", "").strip()
+    if not name:
+        return web.json_response({"error": "Missing name"}, status=400)
+    return web.json_response({"match": exercise_db.lookup(name)})
+
+
+@require_auth
 async def api_get_stats(request: web.Request):
     """Return summary stats for the user."""
     stats = get_stats_sql(request["user_id"])
@@ -377,6 +387,7 @@ def create_app() -> web.Application:
     app.router.add_delete("/api/workouts/{workout_id}", api_delete_workout)
     app.router.add_get("/api/exercises", api_get_exercise_names)
     app.router.add_get("/api/exercises/last", api_get_last_exercise)
+    app.router.add_get("/api/exercises/lookup", api_lookup_exercise)
     app.router.add_get("/api/stats", api_get_stats)
     app.router.add_get("/api/export/json", api_export_json)
     app.router.add_get("/api/export/csv", api_export_csv)
