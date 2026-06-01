@@ -44,6 +44,17 @@ class TestLookup:
         assert exercise_db.lookup("") is None
         assert exercise_db.lookup("   ") is None
 
+    def test_short_acronyms_dont_substring_match_characters(self):
+        # Regression: "RDL" used to match "Hurdle Hops" because "rdl"
+        # appears as a character substring inside "hu**rdl**ehops".
+        assert exercise_db.lookup("RDL") is None
+        assert exercise_db.lookup("OHP") is None
+
+    def test_multi_token_requires_full_coverage(self):
+        # Regression: "BB Row" used to match "Sled Row" because both share
+        # the "row" token. Strict 100% coverage prevents this.
+        assert exercise_db.lookup("BB Row") is None
+
     def test_returned_shape(self):
         m = exercise_db.lookup("Pullups")
         # The slim view drops `instructions` and `images`.

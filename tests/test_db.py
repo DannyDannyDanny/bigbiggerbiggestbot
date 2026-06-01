@@ -253,6 +253,60 @@ class TestAllExerciseNames:
         assert db.get_all_exercise_names() == ["Apple", "Mango", "Zebra"]
 
 
+# ── exercise aliases ─────────────────────────────────────────────
+
+
+class TestExerciseAliases:
+    def test_seed_loaded(self, tmp_db):
+        assert db.resolve_exercise_alias("OHP") == "Standing Military Press"
+        assert db.resolve_exercise_alias("rdl") == "Romanian Deadlift"
+        assert db.resolve_exercise_alias("Bench") == "Barbell Bench Press - Medium Grip"
+
+    def test_case_insensitive(self, tmp_db):
+        assert db.resolve_exercise_alias("ohp") == "Standing Military Press"
+        assert db.resolve_exercise_alias("OHP") == "Standing Military Press"
+        assert db.resolve_exercise_alias("  Squat  ") == "Barbell Squat"
+
+    def test_unknown_returns_none(self, tmp_db):
+        assert db.resolve_exercise_alias("not-a-thing") is None
+        assert db.resolve_exercise_alias("") is None
+        assert db.resolve_exercise_alias(None) is None
+
+    def test_lookup_exercise_uses_aliases(self, tmp_db):
+        info = db.lookup_exercise("OHP")
+        assert info is not None
+        assert info["name"] == "Standing Military Press"
+        assert "shoulders" in info["primary_muscles"]
+
+    def test_lookup_exercise_falls_through_when_no_alias(self, tmp_db):
+        # No alias for "Plank" → goes straight to exercise_db, which has it.
+        info = db.lookup_exercise("Plank")
+        assert info is not None
+        assert info["name"] == "Plank"
+
+    def test_user_overrides_survive_init(self, tmp_db):
+        # A row inserted with source='user' is preserved across init_db calls;
+        # seed rows get refreshed but user rows don't.
+        with db.get_db() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO exercise_aliases (alias, canonical, source) VALUES (?, ?, 'user')",
+                ("ohp", "Push Press"),
+            )
+        db.init_db()  # re-runs the seed
+        assert db.resolve_exercise_alias("ohp") == "Push Press"
+
+    def test_seed_rows_refreshed_on_reinit(self, tmp_db):
+        # Manually corrupt a seed row → next init_db should rewrite it from
+        # the seed dict (without needing INSERT OR REPLACE acrobatics).
+        with db.get_db() as conn:
+            conn.execute(
+                "UPDATE exercise_aliases SET canonical = 'WRONG' WHERE alias = 'ohp'"
+            )
+        assert db.resolve_exercise_alias("ohp") == "WRONG"
+        db.init_db()
+        assert db.resolve_exercise_alias("ohp") == "Standing Military Press"
+
+
 # ── get_last_exercise ────────────────────────────────────────────
 
 

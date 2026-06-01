@@ -86,7 +86,28 @@ def init_db():
                 data        TEXT    NOT NULL DEFAULT '{}',
                 updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
             );
+
+            -- Maps user-typed exercise slang (lowercased) → canonical name
+            -- in the Free-Exercise-DB. Lookups in exercise_db go through
+            -- this table first so "OHP", "RDL", "Bench" etc. resolve to
+            -- the right entry instead of returning None.
+            -- `source` distinguishes 'seed' (managed by db.py, refreshed
+            -- on every init) from 'user' (preserved across re-seeding).
+            CREATE TABLE IF NOT EXISTS exercise_aliases (
+                alias       TEXT PRIMARY KEY,
+                canonical   TEXT NOT NULL,
+                source      TEXT NOT NULL DEFAULT 'user'
+            );
         """)
+
+        # Migration: existing exercise_aliases rows (from before the `source`
+        # column existed) were all seed-managed. Tag them so re-seeding
+        # refreshes them instead of treating them as protected user edits.
+        alias_cols = {r[1] for r in conn.execute("PRAGMA table_info(exercise_aliases)").fetchall()}
+        if "source" not in alias_cols:
+            conn.execute("ALTER TABLE exercise_aliases ADD COLUMN source TEXT NOT NULL DEFAULT 'seed'")
+
+        _seed_exercise_aliases(conn)
 
         # Migrations
         cols = {r[1] for r in conn.execute("PRAGMA table_info(workouts)").fetchall()}
@@ -98,6 +119,113 @@ def init_db():
         ex_cols = {r[1] for r in conn.execute("PRAGMA table_info(exercises)").fetchall()}
         if "sets_detail" not in ex_cols:
             conn.execute("ALTER TABLE exercises ADD COLUMN sets_detail TEXT")
+
+
+# Common gym shorthand → canonical name in the Free-Exercise-DB.
+# Keys are lowercase. Add/edit at runtime with INSERT OR REPLACE INTO
+# exercise_aliases; new entries here are inserted on the next init_db
+# but never clobber existing rows (INSERT OR IGNORE).
+_EXERCISE_ALIAS_SEED: dict[str, str] = {
+    # Acronyms
+    "ohp":       "Standing Military Press",
+    "rdl":       "Romanian Deadlift",
+    "bb row":    "Bent Over Barbell Row",
+    "db press":  "Dumbbell Bench Press",
+    "db bench":  "Dumbbell Bench Press",
+
+    # Single-word generics — pick the most "default" canonical variant.
+    "bench":     "Barbell Bench Press - Medium Grip",
+    "squat":     "Barbell Squat",
+    "deadlift":  "Barbell Deadlift",
+    "press":     "Standing Military Press",
+    "row":       "Bent Over Barbell Row",
+    "curl":      "Barbell Curl",
+    "shrug":     "Barbell Shrug",
+    "pulldown":  "Wide-Grip Lat Pulldown",
+    "dip":       "Parallel Bar Dip",
+
+    # Plural / singular drift
+    "bench presses": "Barbell Bench Press - Medium Grip",
+    "chinups":       "Chin-Up",
+    "chin ups":      "Chin-Up",
+    "pullup":        "Pullups",
+    "pushup":        "Pushups",
+    "push-up":       "Pushups",
+    "push up":       "Pushups",
+    "sit-ups":       "Sit-Up",
+    "situp":         "Sit-Up",
+    "tricep pushdown":  "Triceps Pushdown",
+    "tricep pushdowns": "Triceps Pushdown",
+    "leg curls":     "Lying Leg Curls",
+    "leg extensions": "Leg Extensions",
+    "lateral raises": "Side Lateral Raise",
+    "lat raise":      "Side Lateral Raise",
+    "lat raises":     "Side Lateral Raise",
+    "front raises":   "Front Dumbbell Raise",
+    "face pulls":     "Face Pull",
+    "box jumps":      "Front Box Jump",
+
+    # Slang / brand variants
+    "pendlay row":    "Bent Over Barbell Row",
+    "conventional deadlift": "Barbell Deadlift",
+    "bulgarian split squat": "Bodyweight Squat",  # closest single-leg in DB; tweak later
+    "good morning":   "Good Morning",
+    "good mornings":  "Good Morning",
+    "hip thrust":     "Barbell Hip Thrust",
+    "hip thrusts":    "Barbell Hip Thrust",
+    "calf raises":    "Standing Calf Raises",
+    "calf raise":     "Standing Calf Raises",
+    "skullcrushers":  "EZ-Bar Skullcrusher",
+    "skull crushers": "EZ-Bar Skullcrusher",
+    "skull crusher":  "EZ-Bar Skullcrusher",
+    "skullcrusher":   "EZ-Bar Skullcrusher",
+}
+
+
+def _seed_exercise_aliases(conn) -> None:
+    """Refresh the seed-managed alias rows. Wipes existing seed rows and
+    rewrites them from the current `_EXERCISE_ALIAS_SEED` dict. Rows with
+    `source = 'user'` are never touched.
+    """
+    conn.execute("DELETE FROM exercise_aliases WHERE source = 'seed'")
+    # Skip seed entries whose alias is already claimed by a user row — the
+    # user's choice wins, no surprise overwrite.
+    user_aliases = {r[0] for r in conn.execute(
+        "SELECT alias FROM exercise_aliases WHERE source = 'user'"
+    ).fetchall()}
+    rows = [
+        (a, c, "seed")
+        for a, c in _EXERCISE_ALIAS_SEED.items()
+        if a not in user_aliases
+    ]
+    conn.executemany(
+        "INSERT INTO exercise_aliases (alias, canonical, source) VALUES (?, ?, ?)",
+        rows,
+    )
+
+
+def resolve_exercise_alias(name: str) -> str | None:
+    """Return the canonical DB name for a slang/alias input, or None."""
+    if not name:
+        return None
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT canonical FROM exercise_aliases WHERE alias = ?",
+            (name.strip().lower(),),
+        ).fetchone()
+    return row["canonical"] if row else None
+
+
+def lookup_exercise(name: str) -> dict | None:
+    """Alias-aware Free-Exercise-DB lookup. Resolve user slang to a canonical
+    name first; then run the exercise_db matcher. Returns the slim entry
+    (name + primary/secondary muscles + equipment) or None.
+    """
+    import exercise_db
+    if not name:
+        return None
+    canonical = resolve_exercise_alias(name) or name
+    return exercise_db.lookup(canonical)
 
 
 def _save_exercises(conn, workout_id: int, superset_groups: list[list[dict]]):

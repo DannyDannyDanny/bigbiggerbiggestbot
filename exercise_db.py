@@ -82,7 +82,19 @@ def _slim(entry: dict) -> dict:
 
 
 def lookup(name: str) -> Optional[dict]:
-    """Return the slim entry for the best name match, or None."""
+    """Return the slim entry for the best name match, or None.
+
+    Tiers (priority order):
+      1. exact (case-insensitive)
+      2. compressed exact — collapses hyphens/spaces ("Pull-ups" → "Pullups")
+      3. word-boundary substring (only for multi-token inputs)
+      4. token overlap requiring 100% coverage of the user's tokens
+         (only for multi-token inputs)
+
+    Single-token inputs (e.g. "Bench", "Squat", "RDL", "OHP") that don't hit
+    tier 1 or 2 return None — there's no robust way to disambiguate without
+    an alias table.
+    """
     if not name:
         return None
     needle = name.strip()
@@ -93,48 +105,50 @@ def lookup(name: str) -> Optional[dict]:
     if not compressed:
         return None
 
-    # 1. Exact (case-insensitive)
+    # 1. Exact (case-insensitive).
     hit = _BY_LOWER_NAME.get(lower)
     if hit:
         return _slim(hit)
 
-    # 2. Compressed exact — catches "Pull-ups" → "Pullups", etc.
+    # 2. Compressed exact — "Pull-ups" → "Pullups".
     hit = _BY_COMPRESSED.get(compressed)
     if hit:
         return _slim(hit)
 
-    # 3. Compressed substring (either direction).
-    substring_candidates: list[dict] = [
-        e for e, c in _COMPRESSED if compressed in c or c in compressed
-    ]
+    needle_toks = _tokens(needle)
+    # Below here, partial matches only — and only for multi-token inputs.
+    # A single token is too easily ambiguous (and short acronyms accidentally
+    # hit character-level substrings of unrelated names).
+    if len(needle_toks) < 2:
+        return None
+
+    # 3. Word-boundary substring (lowercase). "bench press" in "bench press
+    # with chains" — yes. "rdl" in "hurdle" — no (no word break).
+    substring_candidates: list[dict] = []
+    for entry in ALL:
+        n = entry.get("name", "")
+        if not n:
+            continue
+        nl = n.lower()
+        if lower in nl or nl in lower:
+            substring_candidates.append(entry)
     if substring_candidates:
-        # Single-token generics ("Bench", "Squat", "Deadlift") match too many
-        # specific DB entries. Refuse rather than confidently mislead the
-        # user — the planned alias table will handle these properly.
-        needle_toks = _tokens(needle)
-        if len(needle_toks) == 1 and len(substring_candidates) > 2:
-            return None
+        # Prefer the shortest DB name (most specific to the typed input).
         substring_candidates.sort(key=lambda e: len(e["name"]))
         return _slim(substring_candidates[0])
 
-    # 4. Token overlap (Jaccard-ish). Require ≥1 shared token AND that the
-    # shared portion covers ≥50% of the user's tokens, so "row" doesn't
-    # match "single arm cable row machine" via one stop-token.
-    needle_toks = _tokens(needle)
-    if not needle_toks:
-        return None
+    # 4. Token overlap, 100% coverage of the user's tokens. So "BB Row" with
+    # tokens {bb, row} only matches a DB entry that contains both — it never
+    # silently latches onto a "row" entry that doesn't share the "bb" cue.
     best: tuple[float, dict] | None = None
     for entry, db_toks in _TOKENS:
         if not db_toks:
             continue
-        overlap = needle_toks & db_toks
-        if not overlap:
+        if not needle_toks <= db_toks:
             continue
-        coverage = len(overlap) / len(needle_toks)
-        if coverage < 0.5:
-            continue
-        # Score = coverage, tiebreak by DB-name length (shorter wins).
-        score = coverage - 0.001 * len(entry["name"])
+        # All user tokens matched; tiebreak by DB-name length (shorter wins,
+        # i.e. the most specific variant).
+        score = -len(entry["name"])
         if best is None or score > best[0]:
             best = (score, entry)
 
